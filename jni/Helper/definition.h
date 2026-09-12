@@ -1,3 +1,13 @@
+#pragma once
+#include <vector>
+#include <string>
+#include <chrono>
+#include <cmath>
+#include <algorithm>
+#include <limits>
+#include <sys/mman.h>
+#include <unistd.h>
+
 enum EAimTrigger 
 {
     None = 0,
@@ -9,15 +19,15 @@ enum EAimTrigger
 
 namespace Cheat 
 {
-    uintptr_t libUE4Base;
-    uintptr_t GName_Offest = 0x8103904;
-    uintptr_t GUObject_Offset = 0xDD91FA0;
-    uintptr_t GNativeAndroidApp_Offset = 0xDAD0280;
-    uintptr_t ActorArray_Offest = 0x9E70E64;
-    uintptr_t ProcessEvent;
+    inline uintptr_t libUE4Base = 0;
+    inline uintptr_t GName_Offest = 0x8103904;
+    inline uintptr_t GUObject_Offset = 0xDD91FA0;
+    inline uintptr_t GNativeAndroidApp_Offset = 0xDAD0280;
+    inline uintptr_t ActorArray_Offest = 0x9E70E64;
+    inline uintptr_t ProcessEvent = 0;
 
-    SDK::ASTExtraPlayerCharacter *localPlayer = nullptr;
-    SDK::ASTExtraPlayerController *localController = nullptr;
+    inline SDK::ASTExtraPlayerCharacter *localPlayer = nullptr;
+    inline SDK::ASTExtraPlayerController *localController = nullptr;
 
     enum EAimTarget 
     {
@@ -27,75 +37,75 @@ namespace Cheat
 
     namespace Esp 
     {
-        bool Line = false;
-        bool Skeleton = false;
-        bool Health = false;
-        bool Distance = false;
-        bool Name = false;
-        bool Box = false;
-        bool LootBox = false;
-        bool Throwable = false;
-        bool Counter = false;
-        bool Target = false;
-        bool ItemEsp = false;
+        inline bool Line = false;
+        inline bool Skeleton = false;
+        inline bool Health = false;
+        inline bool Distance = false;
+        inline bool Name = false;
+        inline bool Box = false;
+        inline bool LootBox = false;
+        inline bool Throwable = false;
+        inline bool Counter = false;
+        inline bool Target = false;
+        inline bool ItemEsp = false;
 
         namespace Vehicle 
         {
-            bool Name = true;
-            bool Health = false;
-            bool Fuel = false;
+            inline bool Name = true;
+            inline bool Health = false;
+            inline bool Fuel = false;
         }
     }
 
     namespace Aimbot 
     {
-        bool Enable;
-        bool VisCheck = true;
-        bool IgnoreKnock = true;
-        bool IgnoreBot;
-        bool AimPrediction;
-        EAimTarget Target;
-        EAimTrigger Trigger;
-        bool RecoilControl;
-        bool Position;
+        inline bool Enable = false;
+        inline bool VisCheck = true;
+        inline bool IgnoreKnock = true;
+        inline bool IgnoreBot = false;
+        inline bool AimPrediction = false;
+        inline EAimTarget Target = Head;
+        inline EAimTrigger Trigger = None;
+        inline bool RecoilControl = false;
+        inline bool Position = false;
 
-        float Recoil = 1.0f;
-        float Range = 500.0f;
-        float Fov = 250.0f;
-        float FireSpeed;
+        inline float Recoil = 1.0f;
+        inline float Range = 500.0f;
+        inline float Fov = 250.0f;
+        inline float FireSpeed = 0.0f;
     }
 
     namespace BulletTrack 
     {
-        bool Enable;
-        bool VisCheck = true;
-        bool IgnoreKnock = true;
-		bool iGnoreBot;
+        inline bool Enable = false;
+        inline bool VisCheck = true;
+        inline bool IgnoreKnock = true;
+        inline bool iGnoreBot = false;
 
-        float Aimset;
-        float Fov = 1000.0f;
-        float Range = 600.0f;
+        inline float Aimset = 0.0f;
+        inline float Fov = 1000.0f;
+        inline float Range = 600.0f;
 
-        bool AutoFire = false;
+        inline bool AutoFire = false;
     }
 
     namespace Memory 
     {
-        bool Wide = false;
-        bool Hit = false;
-        bool Small = false;
-        bool Skin = false;
-        bool Magic = false;
-		bool ShowDamage = false;
+        inline bool Wide = false;
+        inline bool Hit = false;
+        inline bool Small = false;
+        inline bool Skin = false;
+        inline bool Magic = false;
+        inline bool ShowDamage = false;
         
-        float Size = 10000.0f;
+        inline float Size = 10000.0f;
     }
 }
 
-float Xpos;
-float Ypos;
-float UpScale;
-float Xs=2.4, Ys=2.4;
+inline float Xpos = 0;
+inline float Ypos = 0;
+inline float UpScale = 0;
+inline float Xs=2.4f, Ys=2.4f;
 
 #define IM_PI 3.14159265358979323846f
 #define RAD2DEG(x) ((float)(x) * (float)(180.f / IM_PI))
@@ -114,10 +124,10 @@ float Xs=2.4, Ys=2.4;
 
 using namespace SDK;
 
-bool BulletTrack = true;
-using namespace SDK;
-uintptr_t ProcessEvent;
-bool WriteAddr(void *addr, void *buffer, size_t length) 
+inline bool BulletTrack = true;
+inline uintptr_t ProcessEvent = 0;
+
+inline bool WriteAddr(void *addr, void *buffer, size_t length) 
 {
     unsigned long page_size = sysconf(_SC_PAGESIZE);
     unsigned long size = page_size * sizeof(uintptr_t);
@@ -127,43 +137,40 @@ bool WriteAddr(void *addr, void *buffer, size_t length)
 }
 
 template<typename T>
-void Write(uintptr_t addr, T value) {
+inline void Write(uintptr_t addr, T value) {
     WriteAddr((void *) addr, &value, sizeof(T));
 }
 
-int screenWidth = -1, glWidth, screenHeight = -1, glHeight;
-float density = -1;
+inline int screenWidth = -1, glWidth = 0, screenHeight = -1, glHeight = 0;
+inline float density = -1;
 
-int Write_Float(long int addr, float value) {
+inline int Write_Float(long int addr, float value) {
     Tools::WriteAddr((void *) (addr), (void *) &value, 4);
     return 0;
 }
 
-FVector GetBoneLocationByName(ASTExtraPlayerCharacter *Actor, const char *BoneName) {
+inline FVector GetBoneLocationByName(ASTExtraPlayerCharacter *Actor, const char *BoneName) {
     return Actor->GetBonePos(BoneName, FVector());
 }
 
-AHUD *NewHUD = 0;
-
-bool GunSkin = true;
+inline AHUD *NewHUD = 0;
+inline bool GunSkin = true;
 
 using json = nlohmann::json;
-bool ExtremeExp = true;
-static std::string EXP = " ";
-static bool isCircle = true;
-time_t rng = 0;
-std::string ESP;
-std::string Item;
-std::string AIM;
-std::string Memory;
-std::string SilentAim;
-std::string Floating;
-std::string Setting;
-pthread_t t;
+inline bool ExtremeExp = true;
+inline std::string EXP = " ";
+inline bool isCircle = true;
+inline time_t rng = 0;
+inline std::string ESP = "";
+inline std::string Item = "";
+inline std::string AIM = "";
+inline std::string Memory = "";
+inline std::string SilentAim = "";
+inline std::string Floating = "";
+inline std::string Setting = "";
+inline pthread_t t = 0;
 
-using namespace SDK;
-
-void NekoHook(FRotator &angles) 
+inline void NekoHook(FRotator &angles) 
 {
     if (angles.Pitch > 180)
         angles.Pitch -= 360;
@@ -181,7 +188,7 @@ void NekoHook(FRotator &angles)
         angles.Yaw -= 360.0f;
 }
 
-void NekoHook(float *angles) 
+inline void NekoHook(float *angles) 
 {
     if (angles[0] > 180)
         angles[0] -= 360;
@@ -199,7 +206,7 @@ void NekoHook(float *angles)
         angles[1] -= 360.0f;
 }
 
-void NekoHook(Vector3 angles) 
+inline void NekoHook(Vector3 angles) 
 {
     if (angles.X > 180)
         angles.X -= 360;
@@ -217,48 +224,50 @@ void NekoHook(Vector3 angles)
         angles.Y -= 360.0f;
 }
 
-FRotator Rotation = { };
+inline FRotator Rotation = { };
 
 struct sRegion {
     uintptr_t start, end;
 };
 
-std::vector<sRegion> trapRegions;
+inline std::vector<sRegion> trapRegions;
 
-int GetIndex(int currentIndex, int arrayNum) {
+inline int GetIndex(int currentIndex, int arrayNum) {
     if (arrayNum <= 0) {
         return 0;
     }
     return (currentIndex + 1) % arrayNum;
 }
 
-float Random[11] = {0.9f, 1.0f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.9f, 2.0f};
+inline float Random[11] = {0.9f, 1.0f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.9f, 2.0f};
 
-float GetTimeInSeconds() 
+inline float GetTimeInSeconds() 
 {
     return std::chrono::duration<float>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 }
 
-static UFont *tslFont = 0, *robotoTinyFont = 0;
+inline UFont *tslFont = 0;
+inline UFont *robotoTinyFont = 0;
 
-void *LoadFont(void *)
+inline void *LoadFont(void *)
 {
-	while (!tslFont || !robotoTinyFont)
-	{
-		tslFont = UObject::FindObject<UFont>("Font Roboto.Roboto");
-		robotoTinyFont = UObject::FindObject<UFont>("Font RobotoDistanceField.RobotoDistanceField");
-		sleep(1);
-	}
-	return 0;
+    while (!tslFont || !robotoTinyFont)
+    {
+        tslFont = UObject::FindObject<UFont>("Font Roboto.Roboto");
+        robotoTinyFont = UObject::FindObject<UFont>("Font RobotoDistanceField.RobotoDistanceField");
+        sleep(1);
+    }
+    return 0;
 }
 
-float ScaleRand;
-float TimeLift;
+inline float ScaleRand = 0;
+inline float TimeLift = 0;
 
-FVector TargetPos = { };
+inline FVector TargetPos = { };
 
-void DrawOutlinedText(AHUD *HUD, FString Text, FVector2D Pos, FLinearColor Color, FLinearColor OutlineColor, bool isCenter = false) 
+inline void DrawOutlinedText(AHUD *HUD, FString Text, FVector2D Pos, FLinearColor Color, FLinearColor OutlineColor, bool isCenter = false) 
 {
+    if (!HUD || !HUD->Canvas || !tslFont) return;
     UCanvas *Canvas = HUD->Canvas;
     Canvas->K2_DrawText(tslFont, Text, Pos, Color, 1.f, {}, {}, isCenter, isCenter, true, OutlineColor);
 }
@@ -270,7 +279,7 @@ struct D3DMatrix {
     float _41, _42, _43, _44;
 };
 
-D3DMatrix QuatToMatrix(const FQuat &quat){
+inline D3DMatrix QuatToMatrix(const FQuat &quat){
     D3DMatrix mat;
     float magnitude = std::sqrt(quat.X * quat.X + quat.Y * quat.Y + quat.Z * quat.Z + quat.W * quat.W);
     float qx = quat.X / magnitude;
@@ -306,7 +315,7 @@ D3DMatrix QuatToMatrix(const FQuat &quat){
 }
 
 struct Matrix {float m[4][4];};
-Matrix GetMatrix() {
+inline Matrix GetMatrix() {
     static UCanvas* Canvas = nullptr;
     if (Canvas == nullptr) {Canvas = UObject::FindObject<UCanvas>("Canvas Transient.DebugCanvasObject");}
     if (!Canvas) {return Matrix{};}
@@ -319,7 +328,7 @@ Matrix GetMatrix() {
     return *(Matrix*)((uintptr_t)Canvas + lodalele);
 }
 
-bool WorldToScreenPlayer(FVector pos, FVector &screen, int *distance) {
+inline bool WorldToScreenPlayer(FVector pos, FVector &screen, int *distance) {
     Matrix ViewMatrix = GetMatrix();
     screen = {};
     *distance = 0;
@@ -336,7 +345,7 @@ bool WorldToScreenPlayer(FVector pos, FVector &screen, int *distance) {
     return !(screen.X == 0 && screen.Y == 0 && screen.Z == 0);
 }
 
-bool WorldToScreenBone(FVector Position, FVector2D *Screen) {
+inline bool WorldToScreenBone(FVector Position, FVector2D *Screen) {
     Matrix ViewMatrix = GetMatrix();
     float ScreenW = (ViewMatrix.m[0][3] * Position.X) + (ViewMatrix.m[1][3] * Position.Y) + (ViewMatrix.m[2][3] * Position.Z + ViewMatrix.m[3][3]);
     if (ScreenW < 0.0001f)
@@ -349,7 +358,7 @@ bool WorldToScreenBone(FVector Position, FVector2D *Screen) {
     return true;
 }
 
-bool isObjectInvalid(UObject *obj) 
+inline bool isObjectInvalid(UObject *obj) 
 {
     if (!Tools::IsPtrValid(obj)) {
         return true;
@@ -385,8 +394,8 @@ bool isObjectInvalid(UObject *obj)
     return false;
 }
 
-static UEngine *GEngine = 0;
-UWorld *GetWorld()
+inline UEngine *GEngine = 0;
+inline UWorld *GetWorld()
 {
     while (!GEngine)
     {
@@ -405,12 +414,12 @@ UWorld *GetWorld()
     return 0;
 }
 
-TNameEntryArray *GetGNames() 
+inline TNameEntryArray *GetGNames() 
 {
     return ((TNameEntryArray *(*)()) (Cheat::libUE4Base + Cheat::GName_Offest))();
 }
 
-std::vector<AActor *> GetActors() 
+inline std::vector<AActor *> GetActors() 
 {
     auto World = GetWorld();
     if (!World)
@@ -447,7 +456,7 @@ std::vector<AActor *> GetActors()
 }
 
 template<class T>
-void GetAllActors(std::vector<T *> &Actors) 
+inline void GetAllActors(std::vector<T *> &Actors) 
 {
     UGameplayStatics *gGameplayStatics = (UGameplayStatics *) gGameplayStatics->StaticClass();
     auto GWorld = GetWorld();
@@ -462,37 +471,37 @@ void GetAllActors(std::vector<T *> &Actors)
     }
 }
 
-FVector operator*(const FVector &vector, float scalar)
+inline FVector operator*(const FVector &vector, float scalar)
 {
     return FVector({vector.X * scalar, vector.Y * scalar, vector.Z * scalar});
 }
 
-FVector operator+(const FVector &lhs, const FVector &rhs) 
+inline FVector operator+(const FVector &lhs, const FVector &rhs) 
 {
     return {lhs.X + rhs.X, lhs.Y + rhs.Y, lhs.Z + rhs.Z};
 }
 
-FVector operator-(const FVector &lhs, const FVector &rhs) 
+inline FVector operator-(const FVector &lhs, const FVector &rhs) 
 {
     return {lhs.X - rhs.X, lhs.Y - rhs.Y, lhs.Z - rhs.Z};
 }
 
-FVector operator*(const FVector &lhs, const FVector &rhs) 
+inline FVector operator*(const FVector &lhs, const FVector &rhs) 
 {
     return {lhs.X * rhs.X, lhs.Y * rhs.Y, lhs.Z * rhs.Z};
 }
 
-FVector operator/(const FVector &lhs, const FVector &rhs) 
+inline FVector operator/(const FVector &lhs, const FVector &rhs) 
 {
     return {lhs.X / rhs.X, lhs.Y / rhs.Y, lhs.Z / rhs.Z};
 }
 
-SDK::FVector MultiplyVectorFloat(SDK::FVector a, float scalar) 
+inline SDK::FVector MultiplyVectorFloat(SDK::FVector a, float scalar) 
 {
     return {a.X * scalar, a.Y * scalar, a.Z * scalar};
 }
 
-SDK::FVector SubtractVectors(SDK::FVector a, SDK::FVector b) {
+inline SDK::FVector SubtractVectors(SDK::FVector a, SDK::FVector b) {
     SDK::FVector result;
     result.X = a.X - b.X;
     result.Y = a.Y - b.Y;
@@ -500,7 +509,7 @@ SDK::FVector SubtractVectors(SDK::FVector a, SDK::FVector b) {
     return result;
 }
 
-SDK::FVector AddVectors(SDK::FVector a, SDK::FVector b) {
+inline SDK::FVector AddVectors(SDK::FVector a, SDK::FVector b) {
     SDK::FVector result;
     result.X = a.X + b.X;
     result.Y = a.Y + b.Y;
@@ -508,7 +517,7 @@ SDK::FVector AddVectors(SDK::FVector a, SDK::FVector b) {
     return result;
 }
 
-SDK::FVector MultiplyVectors(SDK::FVector a, SDK::FVector b) {
+inline SDK::FVector MultiplyVectors(SDK::FVector a, SDK::FVector b) {
     SDK::FVector result;
     result.X = a.X * b.X;
     result.Y = a.Y * b.Y;
@@ -516,7 +525,7 @@ SDK::FVector MultiplyVectors(SDK::FVector a, SDK::FVector b) {
     return result;
 }
 
-SDK::FVector DivideVectors(SDK::FVector a, SDK::FVector b) {
+inline SDK::FVector DivideVectors(SDK::FVector a, SDK::FVector b) {
     SDK::FVector result;
     result.X = a.X / b.X;
     result.Y = a.Y / b.Y;
@@ -524,22 +533,22 @@ SDK::FVector DivideVectors(SDK::FVector a, SDK::FVector b) {
     return result;
 }
 
-FVector Minus_VectorVector(const FVector& A, const FVector& B)
+inline FVector Minus_VectorVector(const FVector& A, const FVector& B)
 {
     return FVector{A.X - B.X, A.Y - B.Y, A.Z - B.Z};
 }
 
-FVector Add_VectorVector(const FVector& A, const FVector& B)
+inline FVector Add_VectorVector(const FVector& A, const FVector& B)
 {
     return FVector{A.X + B.X, A.Y + B.Y, A.Z + B.Z};
 }
 
-FVector Multiply_VectorFloat(const FVector& A, float Scalar)
+inline FVector Multiply_VectorFloat(const FVector& A, float Scalar)
 {
     return FVector{A.X * Scalar, A.Y * Scalar, A.Z * Scalar};
 }
 
-FVector CalculateWeaponMuzzlePosition(const FVector& weaponLocation, const FRotator& weaponRotation, float weaponBodyLength) {
+inline FVector CalculateWeaponMuzzlePosition(const FVector& weaponLocation, const FRotator& weaponRotation, float weaponBodyLength) {
 
     float radPitch = weaponRotation.Pitch * (3.14159265358979323846 / 180.0f);
     float radYaw = weaponRotation.Yaw * (3.14159265358979323846 / 180.0f);
@@ -558,7 +567,7 @@ FVector CalculateWeaponMuzzlePosition(const FVector& weaponLocation, const FRota
     return muzzlePosition;
 }
 
-FRotator ClampAngles(FRotator inRot) {
+inline FRotator ClampAngles(FRotator inRot) {
     FRotator outRot = inRot;
     if (outRot.Pitch > 180)
         outRot.Pitch -= 360;
@@ -579,7 +588,6 @@ FRotator ClampAngles(FRotator inRot) {
 
 inline FLinearColor UIntToLinearColor(uint32_t color)
 {
-    // Assuming 0xAARRGGBB format
     float A = ((color >> 24) & 0xFF) / 255.f;
     float R = ((color >> 16) & 0xFF) / 255.f;
     float G = ((color >> 8) & 0xFF) / 255.f;
@@ -587,7 +595,7 @@ inline FLinearColor UIntToLinearColor(uint32_t color)
     return FLinearColor(R, G, B, A);
 }
 
-FRotator ToRotator(FVector local, FVector target) {
+inline FRotator ToRotator(FVector local, FVector target) {
     FVector rotation = Minus_VectorVector(local, target);
     float hyp = sqrt(rotation.X * rotation.X + rotation.Y * rotation.Y);
     FRotator newViewAngle = {0};
@@ -599,7 +607,7 @@ FRotator ToRotator(FVector local, FVector target) {
     return newViewAngle;
 }
 
-void DrawRectangle(AHUD *HUD, FVector2D Pos, float Width, float Height, float Thickness, FLinearColor Color) 
+inline void DrawRectangle(AHUD *HUD, FVector2D Pos, float Width, float Height, float Thickness, FLinearColor Color) 
 {
     HUD->DrawLine(Pos.X, Pos.Y, Pos.X + Width, Pos.Y, Color, Thickness);
     HUD->DrawLine(Pos.X, Pos.Y, Pos.X, Pos.Y + Height, Color, Thickness);
@@ -607,12 +615,12 @@ void DrawRectangle(AHUD *HUD, FVector2D Pos, float Width, float Height, float Th
     HUD->DrawLine(Pos.X, Pos.Y + Height, Pos.X + Width, Pos.Y + Height, Color, Thickness);
 }
 
-void DrawFilledRectangle(AHUD *HUD, FVector2D Pos, float Width, float Height, FLinearColor Color) 
+inline void DrawFilledRectangle(AHUD *HUD, FVector2D Pos, float Width, float Height, FLinearColor Color) 
 {
     HUD->DrawRect(Color, Pos.X, Pos.Y, Width, Height);
 }
 
-bool isInsideFOVs(int x, int y) {
+inline bool isInsideFOVs(int x, int y) {
     if (!Cheat::BulletTrack::Enable)
         return true;
 
@@ -622,7 +630,7 @@ bool isInsideFOVs(int x, int y) {
     return (x - circle_x) * (x - circle_x) + (y - circle_y) * (y - circle_y) <= rad * rad;
 }
 
-auto GetTargetForAimBot()
+inline auto GetTargetForAimBot()
 {
     ASTExtraPlayerCharacter *result = nullptr;
     float max = std::numeric_limits<float>::infinity();
@@ -696,78 +704,7 @@ auto GetTargetForAimBot()
     return result;
 }
 
-/*
-auto GetTargetByPussy() {
-    ASTExtraPlayerCharacter *result = 0;
-    float max = std::numeric_limits<float>::infinity();
-    auto Actors = GetActors();
-
-    auto localPlayer = Cheat::localPlayer;
-    auto localController = Cheat::localController;
-    FVector ViewPosY{0, 0, 0};
-    if (localPlayer) {
-        ViewPosY = localPlayer->GetBonePos("Head", {});
-        ViewPosY.Z += -15.0f;
-    }
-
-    if (localPlayer) {
-        for (int i = 0; i < Actors.size(); i++) {
-            auto Actor = Actors[i];
-            if (isObjectInvalid(Actor))
-                continue;
-
-            if (Actor->IsA(ASTExtraPlayerCharacter::StaticClass())) {
-
-                auto Player = (ASTExtraPlayerCharacter *) Actor;
-                float lund = localPlayer->GetDistanceTo(Player) / 100.0f;
-
-                if (lund > 500.0f)
-                    continue;
-					
-                if (Player->PlayerKey == localPlayer->PlayerKey)
-                    continue;
-
-                if (Player->TeamID == localPlayer->TeamID)
-                    continue;
-
-                if (Player->bDead)
-                    continue;
-
-                if (Player->bHidden)
-                    continue;
-
-                if (Cheat::BulletTrack::IgnoreKnock) {
-                    if (Player->Health == 0.0f)
-                        continue;
-                }
-
-                if (Cheat::BulletTrack::VisCheck) {
-
-                    if (!localController->LineOfSightTo(Player, {0, 0, 0}, true))
-                        continue;
-                }
-
-                if (Cheat::BulletTrack::iGnoreBot) {
-                    if (Player->bEnsure)
-                        continue;
-                }
-                float dist = localPlayer->GetDistanceTo(Player);
-                if (dist < max) {
-                    max = dist;
-                    result = Player;
-                }
-            }
-        }
-    }
-
-    return result;
-}*/
-
-
-
-
-
-auto GetTargetByPussy() 
+inline auto GetTargetByPussy() 
 {
     ASTExtraPlayerCharacter *result = 0;
     float max = std::numeric_limits<float>::infinity();
@@ -775,7 +712,6 @@ auto GetTargetByPussy()
 
     auto localPlayer = Cheat::localPlayer;
     auto localController = Cheat::localController;
-    FVector PlayerPos = {};
 
     if (localPlayer) {
         for (int i = 0; i < Actors.size(); i++) {
@@ -848,8 +784,8 @@ auto GetTargetByPussy()
     return result;
 }
 
-void (*orig_shoot_event)(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot, void *unk1, int unk2, float a6, float a7, float a8) = 0;
-void shoot_event(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot, ASTExtraShootWeapon *weapon, int unk1, float a6, float a7, float a8)
+inline void (*orig_shoot_event)(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot, void *unk1, int unk2, float a6, float a7, float a8) = 0;
+inline void shoot_event(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot, ASTExtraShootWeapon *weapon, int unk1, float a6, float a7, float a8)
 {
     if (Cheat::BulletTrack::Enable)
     {
@@ -866,61 +802,7 @@ void shoot_event(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot
     return orig_shoot_event(thiz, start, rot, weapon, unk1, a6, a7, a8);
 }
 
-/*
-void (*GalaxyShoot)(uintptr_t Weapon, FVector StartLoc, FRotator StartRot, int ShootID);
-void xBulletInner(uintptr_t Weapon, FVector StartLoc, FRotator StartRot, int ShootID)
-{
-    if (Cheat::BulletTrack::Enable)
-    {
-        auto Target = GetTargetByPussy();
-        if (Target != 0)
-        {
-		FVector targetAimPos = Target->GetBonePos("Head", {}); // Default to neck
-
-		
-            if (auto WeaponManagerComponent = Cheat::localPlayer->WeaponManagerComponent)
-            {
-                if (auto CurrentWeaponReplicated = (ASTExtraShootWeapon*)WeaponManagerComponent->CurrentWeaponReplicated)
-                {
-                    float distance = Cheat::localPlayer->GetDistanceTo(Target);
-                    float BulletFireSpeed = CurrentWeaponReplicated->GetBulletFireSpeedFromEntity();
-                    float timeToTravel = distance / BulletFireSpeed;
-                    auto CurrentVehicle = Target->CurrentVehicle;
-
-                    if (CurrentVehicle)
-                    {
-                        FVector LinearVelocity = CurrentVehicle->ReplicatedMovement.LinearVelocity;
-                        FVector Velocity = UKismetMathLibrary::Multiply_VectorFloat(LinearVelocity, timeToTravel);
-                        targetAimPos = targetAimPos + Velocity;
-                    }
-                    else
-                    {
-                        FVector LinearVelocity = Target->GetVelocity();
-                        FVector Velocity = UKismetMathLibrary::Multiply_VectorFloat(LinearVelocity, timeToTravel);
-                        targetAimPos = targetAimPos + Velocity;
-                    }
-
-                    static int index = 0;
-                    index = GetIndex(index, 11);
-                    float Smoothing = Random[index];
-                    FRotator gunrotaton = StartRot;
-                    FRotator aimrotation = ToRotator(StartLoc, targetAimPos);
-                    aimrotation.Pitch -= gunrotaton.Pitch;
-                    aimrotation.Yaw -= gunrotaton.Yaw;
-                    aimrotation.Roll = 0.0f;
-                    ClampAngles(aimrotation);
-                    gunrotaton.Pitch += aimrotation.Pitch / Smoothing;
-                    gunrotaton.Yaw += aimrotation.Yaw / Smoothing;
-                    gunrotaton.Roll = 0.0f;
-                    return GalaxyShoot(Weapon, StartLoc, gunrotaton, ShootID);
-                }
-            }
-        }
-    }
-    return GalaxyShoot(Weapon, StartLoc, StartRot, ShootID);
-}*/
-
-const char *GetVehicleName(ASTExtraVehicleBase *Vehicle) 
+inline const char *GetVehicleName(ASTExtraVehicleBase *Vehicle) 
 {
     switch (Vehicle->VehicleShapeType) 
     {
@@ -1015,24 +897,22 @@ const char *GetVehicleName(ASTExtraVehicleBase *Vehicle)
 
 namespace Settings 
 {
-    static int Tab = 1;
+    inline int Tab = 1;
 }
 
-void RenderESPPRIVATE(AHUD* HUD, int ScreenWidth, int ScreenHeight) 
+inline void RenderESPPRIVATE(AHUD* HUD, int ScreenWidth, int ScreenHeight) 
 {
     ASTExtraPlayerCharacter* localPlayer = nullptr;
     ASTExtraPlayerController* localPlayerController = nullptr;
     glWidth = ScreenWidth;
     glHeight = ScreenHeight;
     
-    // Target ESP line drawing
     if (Cheat::Esp::Target)
     {
         auto Target = GetTargetByPussy();
         if (Target)
         {
             auto targetHead = Target->GetBonePos("Head", {});
-            auto targetFeet = Target->GetBonePos("Head", {}); // (This looks like it should be "Foot_L" or similar, but I kept as your code)
             FVector2D targetSC, footPos;
             if (W2S(targetHead, &targetSC) && W2S(targetHead, &footPos))
             {
@@ -1040,26 +920,24 @@ void RenderESPPRIVATE(AHUD* HUD, int ScreenWidth, int ScreenHeight)
             }
         }
     }
-	
-    // Canvas handling
+    
     UCanvas* Canvas = HUD->Canvas;
     if (Canvas)
     {
         static bool loadFont = false;
         if (!loadFont) 
         {
-            pthread_t t;
-            pthread_create(&t, NULL, LoadFont, NULL);
+            pthread_t t2;
+            pthread_create(&t2, NULL, LoadFont, NULL);
             loadFont = true;
         }
 
         if (!tslFont || !robotoTinyFont) return;
-		
+        
         tslFont->LegacyFontSize = 25;
         DrawOutlinedText(HUD, FString("SANKE - AIM"), {glWidth / 2.0f, 65}, COLOR_RED, COLOR_BLACK, true);
         tslFont->LegacyFontSize = TSL_FONT_DEFAULT_SIZE;
 
-        // Get Local Player & Controller
         auto GWorld = GetWorld();
         if (GWorld && GWorld->NetDriver && GWorld->NetDriver->ServerConnection)
         {
@@ -1085,16 +963,14 @@ void RenderESPPRIVATE(AHUD* HUD, int ScreenWidth, int ScreenHeight)
     }
 }
 
-// Hooked ProcessEvent (merged logic)
-void* (*pProcessEvent)(UObject*, UFunction*, void*);
-void* kProcessEvent(UObject* a1, UFunction* a, void* b) 
+inline void* (*pProcessEvent)(UObject*, UFunction*, void*) = nullptr;
+inline void* kProcessEvent(UObject* a1, UFunction* a, void* b) 
 {
     if (!a1 || !a) 
         return pProcessEvent(a1, a, b);
 
     auto fnc = a->GetFullName();
 
-    // Show damage numbers
     if (Cheat::localPlayer && Cheat::localController && Cheat::Memory::ShowDamage && fnc.find("ClientOnDamageToOther") != std::string::npos) 
     {
         auto localContrller = reinterpret_cast<ASTExtraPlayerController*>(a1);
@@ -1112,7 +988,7 @@ void* kProcessEvent(UObject* a1, UFunction* a, void* b)
     return pProcessEvent(a1, a, b);
 }
 
-void Box4LineHUD(
+inline void Box4LineHUD(
     AHUD* HUD,
     float X, 
     float Y, 
@@ -1126,27 +1002,21 @@ void Box4LineHUD(
     float cornerW = W * CornerRatio;
     float cornerH = H * CornerRatio;
 
-    // Top Left
     HUD->DrawLine(X, Y, X + cornerW, Y, Color, Thickness);
     HUD->DrawLine(X, Y, X, Y + cornerH, Color, Thickness);
 
-    // Top Right
     HUD->DrawLine(X + W - cornerW, Y, X + W, Y, Color, Thickness);
     HUD->DrawLine(X + W, Y, X + W, Y + cornerH, Color, Thickness);
 
-    // Bottom Left
     HUD->DrawLine(X, Y + H - cornerH, X, Y + H, Color, Thickness);
     HUD->DrawLine(X, Y + H, X + cornerW, Y + H, Color, Thickness);
 
-    // Bottom Right
     HUD->DrawLine(X + W - cornerW, Y + H, X + W, Y + H, Color, Thickness);
     HUD->DrawLine(X + W, Y + H - cornerH, X + W, Y + H, Color, Thickness);
 }
 
-#include <cmath> // cosf, sinf
+#include <cmath>
 
-// Generic helper — works for SDK::AHud or AHUD depending on your HUD type and color type.
-// Put this in a header or above your drawing code.
 template<typename HUD_T, typename COLOR_T>
 inline void DrawCircleHelper(HUD_T* HUD, float X, float Y, float Radius, COLOR_T Color,
                              int NumSegments = 36, float Thickness = 1.0f)
@@ -1163,7 +1033,6 @@ inline void DrawCircleHelper(HUD_T* HUD, float X, float Y, float Radius, COLOR_T
         float newX = X + cosf(angle) * Radius;
         float newY = Y + sinf(angle) * Radius;
 
-        // Use the HUD's DrawLine method (same one you already use for skeleton lines)
         HUD->DrawLine(prevX, prevY, newX, newY, Color, Thickness);
 
         prevX = newX;

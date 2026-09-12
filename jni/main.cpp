@@ -9,6 +9,7 @@
 //#include "Helper/Detect.cpp"
 #include "Helper/Noob.h"
 #include "Helper/Skin.h"
+#include "ImGuiMenu.h"
 
 #include <fcntl.h>
 #include <iostream>
@@ -739,7 +740,21 @@ void *RunGame(void *)
 	A64HookFunction((void *)(Cheat::libUE4Base + 0x5E6A910), (void *)hook__kill_message, (void **)&orig_kill_message);
 	
 	//DobbyHook((void *)(Cheat::libUE4Base + 0x62F9640), (void *)shoot_event, (void **)&orig_shoot_event);
-	
+
+    // Install ImGui EGL hooks - menu only, ESP still uses DrawHUD
+    InstallImGuiHooks();
+
+    // Optional: Hook your renderer function that gives EGLDisplay/EGLSurface via ConfigAttrib
+    // If you know the offset of the function you posted (ConfigAttrib,a2), set it here:
+    // Example: your function might be at libUE4Base + 0x1234567
+    // Uncomment and set correct offset:
+    // uintptr_t rendererOffset = 0x0; // TODO: set your renderer offset, e.g. 0x6XXXXXX
+    // if (rendererOffset != 0) {
+    //     InstallRendererHook(Cheat::libUE4Base + rendererOffset);
+    // }
+    // If you don't know offset, eglSwapBuffers hook alone is enough for ImGui menu.
+    // You can also hook renderer via pattern scan if needed.
+
     items_data = json::parse(JSON_ITEMS);
     AutoEspOn();
 

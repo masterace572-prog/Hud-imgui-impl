@@ -1,10 +1,11 @@
+#pragma once
 
-bool bValid = false;
-std::string g_Token, g_Auth;
-android_app *g_App = 0;
+inline bool bValid = false;
+inline std::string g_Token, g_Auth;
+inline android_app *g_App = 0;
 
 
-std::string getClipboardText() 
+inline std::string getClipboardText() 
 {
     if (!g_App)
         return "";
@@ -61,7 +62,7 @@ std::string getClipboardText()
 }
 
 
-const char *GetAndroidID(JNIEnv *env, jobject context) 
+inline const char *GetAndroidID(JNIEnv *env, jobject context) 
 {
     jclass contextClass = env->FindClass(/*android/content/Context*/
                               StrEnc("`L+&0^[S+-:J^$,r9q92(as",
@@ -99,7 +100,7 @@ const char *GetAndroidID(JNIEnv *env, jobject context)
     return env->GetStringUTFChars(str, 0);
 }
 
-const char *GetDeviceModel(JNIEnv *env) {
+inline const char *GetDeviceModel(JNIEnv *env) {
     jclass buildClass = env->FindClass(/*android/os/Build*/StrEnc("m5I{GKGWBP-VOxkA",
                         "\x0C\x5B\x2D\x09\x28\x22\x23\x78\x2D\x23\x02\x14\x3A\x11\x07\x25",
                         16).c_str());
@@ -114,7 +115,7 @@ const char *GetDeviceModel(JNIEnv *env) {
     return env->GetStringUTFChars(str, 0);
 }
 
-const char *GetDeviceBrand(JNIEnv *env) {
+inline const char *GetDeviceBrand(JNIEnv *env) {
     jclass buildClass = env->FindClass(/*android/os/Build*/StrEnc("0iW=2^>0zTRB!B90",
                         "\x51\x07\x33\x4F\x5D\x37\x5A\x1F\x15\x27\x7D\x00\x54\x2B\x55\x54",
                         16).c_str());
@@ -129,7 +130,7 @@ const char *GetDeviceBrand(JNIEnv *env) {
     return env->GetStringUTFChars(str, 0);
 }
 
-const char *GetPackageName(JNIEnv *env, jobject context) {
+inline const char *GetPackageName(JNIEnv *env, jobject context) {
     jclass contextClass = env->FindClass(/*android/content/Context*/
                               StrEnc("`L+&0^[S+-:J^$,r9q92(as",
                                      "\x01\x22\x4F\x54\x5F\x37\x3F\x7C\x48\x42\x54\x3E\x3B\x4A\x58\x5D\x7A\x1E\x57\x46\x4D\x19\x07",
@@ -146,7 +147,7 @@ const char *GetPackageName(JNIEnv *env, jobject context) {
     return env->GetStringUTFChars(str, 0);
 }
 
-const char *GetDeviceUniqueIdentifier(JNIEnv *env, const char *uuid) {
+inline const char *GetDeviceUniqueIdentifier(JNIEnv *env, const char *uuid) {
     jclass uuidClass = env->FindClass(/*java/util/UUID*/
                            StrEnc("B/TxJ=3BZ_]SFx", "\x28\x4E\x22\x19\x65\x48\x47\x2B\x36\x70\x08\x06\x0F\x3C",
                                   14).c_str());
@@ -175,7 +176,7 @@ const char *GetDeviceUniqueIdentifier(JNIEnv *env, const char *uuid) {
     return env->GetStringUTFChars(str, 0);
 }
 
-std::string RSA_Encrypt(const std::string &clear_text, const std::string &pub_key) {
+inline std::string RSA_Encrypt(const std::string &clear_text, const std::string &pub_key) {
     std::string result;
     BIO *key = BIO_new_mem_buf((unsigned char *) pub_key.c_str(), -1);
     RSA *rsa = RSA_new();
@@ -211,7 +212,7 @@ std::string RSA_Encrypt(const std::string &clear_text, const std::string &pub_ke
     return result;
 }
 
-std::string RSA_Decrypt(const std::string &cipher_text, const std::string &pub_key) {
+inline std::string RSA_Decrypt(const std::string &cipher_text, const std::string &pub_key) {
     std::string result;
     BIO *key = BIO_new_mem_buf((unsigned char *) pub_key.c_str(), -1);
     RSA *rsa = RSA_new();
@@ -238,7 +239,7 @@ std::string RSA_Decrypt(const std::string &cipher_text, const std::string &pub_k
     return result;
 }
 
-uint8_t PUBLIC_KEY[450] = {0x8D, 0x8D, 0x8D, 0x8D, 0x8D, 0xE2, 0xE5, 0xE7, 0xE9, 0xEE, 0x80, 0xF0,
+inline uint8_t PUBLIC_KEY[450] = {0x8D, 0x8D, 0x8D, 0x8D, 0x8D, 0xE2, 0xE5, 0xE7, 0xE9, 0xEE, 0x80, 0xF0,
                            0xF5, 0xE2, 0xEC, 0xE9, 0xE3, 0x80, 0xEB, 0xE5, 0xF9, 0x8D, 0x8D, 0x8D,
                            0x8D, 0x8D, 0xAA, 0xED, 0xE9, 0xE9, 0xE2, 0xE9, 0xCA, 0xE1, 0xEE, 0xE2,
                            0xC7, 0xCB, 0xD1, 0xC8, 0xCB, 0xC9, 0xE7, 0x99, 0xD7, 0x90, 0xE2, 0xE1,
@@ -285,7 +286,7 @@ struct MemoryStruct {
     size_t size;
 };
 
-static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+inline size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *) userp;
 
@@ -301,7 +302,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
     return realsize;
 }
 
-std::string Login(const char *userKey) {
+inline std::string Login(const char *userKey) {
     if (!g_App)
         return "Internal Error";
 

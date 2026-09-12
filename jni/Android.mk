@@ -112,8 +112,17 @@ LOCAL_ARM_MODE := arm
 
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/curl/curl-android-$(TARGET_ARCH_ABI)/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/curl/openssl-android-$(TARGET_ARCH_ABI)/include
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/imgui
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/Dobby/include
 
 LOCAL_SRC_FILES :=  main.cpp \
+        ImGuiMenu.cpp \
+        imgui/imgui.cpp \
+        imgui/imgui_draw.cpp \
+        imgui/imgui_widgets.cpp \
+        imgui/imgui_tables.cpp \
+        imgui/backends/imgui_impl_opengl3.cpp \
+        imgui/backends/imgui_impl_android.cpp \
         SDK/PUBGM_Basic.cpp \
         SDK/PUBGM_Basic_functions.cpp \
         SDK/PUBGM_CoreUObject_functions.cpp \

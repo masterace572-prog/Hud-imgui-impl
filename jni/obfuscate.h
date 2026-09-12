@@ -1,3 +1,6 @@
+#pragma once
+#ifndef OBFUSCATE_H
+#define OBFUSCATE_H
 #include <cstddef>
 #include <string>
 
@@ -116,3 +119,5 @@ namespace ay {
         static auto obfuscated_data = ay::obfuscated_data<n, key>(obfuscator); \
         return obfuscated_data; \
     }()
+
+#endif // OBFUSCATE_H

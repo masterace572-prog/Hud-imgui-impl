@@ -8,15 +8,16 @@
 #include <dlfcn.h>
 #include <unistd.h>
 
+#include "Helper/include.h"
+#include "Helper/definition.h"
+#include "Helper/Login.h"
+
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
 #include "imgui/backends/imgui_impl_android.h"
 
-#include "Helper/definition.h"
-#include "Helper/Login.h"
 #include "Dobby/dobby.h"
 #include "Includes/json.hpp"
-#include "Includes/obfuscate.h"
 #include <map>
 #include <string>
 

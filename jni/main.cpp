@@ -705,11 +705,14 @@ void initOffset()
     ProcessEvent = (Cheat::libUE4Base + Cheat::ProcessEvent_Offset);
     if (ProcessEvent) 
     {
-        // Hook ProcessEvent to get ReceiveDrawHUD
-        char offsetStr[32];
-        sprintf(offsetStr, "0x%lx", (unsigned long)Cheat::ProcessEvent_Offset);
-        HOOK_LIB("libUE4.so", offsetStr, hkProcessEvent, oProcessEvent);
-        LOGI("ProcessEvent hooked at 0x%lx", (unsigned long)Cheat::ProcessEvent_Offset);
+        // Direct hook without OBFUSCATE macro (OBFUSCATE needs literal)
+        if (DobbyHook((void*)ProcessEvent, (void*)hkProcessEvent, (void**)&oProcessEvent) == 0) {
+            LOGI("ProcessEvent hooked at 0x%lx via Dobby", (unsigned long)Cheat::ProcessEvent_Offset);
+        } else {
+            // Fallback via A64HookFunction
+            A64HookFunction((void*)ProcessEvent, (void*)hkProcessEvent, (void**)&oProcessEvent);
+            LOGI("ProcessEvent hooked at 0x%lx via A64Hook", (unsigned long)Cheat::ProcessEvent_Offset);
+        }
     }
 }
 

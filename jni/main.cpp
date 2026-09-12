@@ -659,29 +659,13 @@ void Login()
 }
 
 
-void* (*oProcessEvent)(UObject*, UFunction*, void*);
+void* (*oProcessEvent)(UObject*, UFunction*, void*) = nullptr;
 void* hkProcessEvent(UObject* pObj, UFunction* pFunc, void* pArgs) 
 {
     if (!pObj || !pFunc) 
         return oProcessEvent(pObj, pFunc, pArgs);
 
-    const char* EngineHUD = ("Function Engine.HUD.ReceiveDrawHUD");
-    if (pFunc->GetFullName() == EngineHUD) 
-    {
-        AHUD* pHUD = (AHUD*)pObj;
-        if (pHUD) 
-        {
-            auto Params = (AHUD_ReceiveDrawHUD_Params*)pArgs;
-            if (Params) 
-            {
-                RenderESPPRIVATE(pHUD, Params->SizeX, Params->SizeY);
-                DrawHUD(pHUD);
-                DrawMemory();
-                SkinHack();
-            }
-        }
-    }
-
+    // Keep only ShowDamage via ProcessEvent if needed, but ReceiveDrawHUD is now direct hooked
     auto fnc = pFunc->GetFullName();
     if (Cheat::localPlayer && Cheat::localController && Cheat::Memory::ShowDamage && fnc.find("ClientOnDamageToOther") != std::string::npos) 
     {
@@ -699,16 +683,42 @@ void* hkProcessEvent(UObject* pObj, UFunction* pFunc, void* pArgs)
     return oProcessEvent(pObj, pFunc, pArgs);
 }
 
+// Direct ReceiveDrawHUD hook at offset 0xafc6044 - no ProcessEvent
+void (*orig_ReceiveDrawHUD)(AHUD* hud, int SizeX, int SizeY) = nullptr;
+void hkReceiveDrawHUD(AHUD* hud, int SizeX, int SizeY)
+{
+    if (hud) {
+        // ESP via HUD - same as before but now direct
+        RenderESPPRIVATE(hud, SizeX, SizeY);
+        DrawHUD(hud);
+        DrawMemory();
+        SkinHack();
+    }
+    if (orig_ReceiveDrawHUD) {
+        orig_ReceiveDrawHUD(hud, SizeX, SizeY);
+    }
+}
+
 void initOffset() 
 {
-    // Use new offsets provided: Process_Event_Offset 0x8e5753c, ReceiveDrawHUD 0xafc6044
-    // ShadowHook only
-    ProcessEvent = (Cheat::libUE4Base + Cheat::ProcessEvent_Offset);
-    if (ProcessEvent) 
+    // Hook ReceiveDrawHUD directly via offset 0xafc6044 using ShadowHook only
+    uintptr_t receiveDrawHUDAddr = Cheat::libUE4Base + Cheat::ReceiveDrawHUD_Offset;
+    if (receiveDrawHUDAddr) 
     {
-        shadowhook_hook_func_addr((void*)ProcessEvent, (void*)hkProcessEvent, (void**)&oProcessEvent);
-        LOGI("ProcessEvent hooked at 0x%lx via ShadowHook", (unsigned long)Cheat::ProcessEvent_Offset);
+        shadowhook_hook_func_addr((void*)receiveDrawHUDAddr, (void*)hkReceiveDrawHUD, (void**)&orig_ReceiveDrawHUD);
+        LOGI("ReceiveDrawHUD hooked at 0x%lx via ShadowHook (direct)", (unsigned long)Cheat::ReceiveDrawHUD_Offset);
     }
+
+    // Optional: if you still want ProcessEvent for ShowDamage, hook it via offset
+    // But per your request, we do NOT use ProcessEvent for ESP - only direct ReceiveDrawHUD
+    // If you want ShowDamage, uncomment below:
+    /*
+    uintptr_t procEventAddr = Cheat::libUE4Base + Cheat::ProcessEvent_Offset;
+    if (procEventAddr) {
+        shadowhook_hook_func_addr((void*)procEventAddr, (void*)hkProcessEvent, (void**)&oProcessEvent);
+        LOGI("ProcessEvent hooked at 0x%lx via ShadowHook for ShowDamage", (unsigned long)Cheat::ProcessEvent_Offset);
+    }
+    */
 }
 
 void *RunGame(void *) 

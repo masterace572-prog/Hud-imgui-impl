@@ -10,8 +10,6 @@
 
 #include "Helper/include.h"
 #include "Helper/definition.h"
-#include "Helper/Login.h"
-
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
 #include "imgui/backends/imgui_impl_android.h"

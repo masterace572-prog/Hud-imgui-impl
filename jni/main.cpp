@@ -1,14 +1,7 @@
 #include "Helper/include.h"
 #include "Helper/definition.h"
 #include "Helper/Items.h"
-#include "Helper/Login.h"
-#include "Helper/bypass.h"
 #include "Helper/Hit.h"
-#include "Helper/KillMsg.h"
-#include "Helper/AntiCanary.cpp"
-//#include "Helper/Detect.cpp"
-#include "Helper/Noob.h"
-#include "Helper/Skin.h"
 #include "ImGuiMenu.h"
 
 #include <fcntl.h>
@@ -19,36 +12,6 @@
 
 json items_data;
 std::map<int, bool> Items;
-
-bool logged = false;
-const char *Gamepackage = "com.pubg.imobile";
-
-void *AntiCrack(void *) 
-{    
-    sleep(10);
-
-    static char s[64];
-    auto key = getClipboardText();
-    strncpy(s, key.c_str(), sizeof s);
-
-    static std::string err = Login(s);
-
-    if (err == "OK") 
-    {
-        static bool G = "f";
-        static bool X = "a";
-        static bool R = "l";
-        static bool O = "s";
-        static bool P = "e";
-        
-        logged = G + X + R + O + P;
-    } 
-    else 
-    {  
-        exit(1);
-    }
-    return NULL;
-}
 
 void DrawHUD(AHUD* HUD)
 {
@@ -105,49 +68,48 @@ void DrawHUD(AHUD* HUD)
                 if (W2S(HeadPos, &headPosSC) && W2S(RootPos, &RootPosSC))
                 {
                     if (Cheat::Esp::Skeleton)
-					{
-    					static std::vector<std::vector<std::string>> skeleton =
-    					{
-        					{ "Head", "neck_01", "spine_03", "spine_02", "spine_01", "pelvis" },
-        					{ "neck_01", "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r", "item_r" },
-        					{ "neck_01", "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l", "item_l" },
-        					{ "pelvis", "thigh_r", "calf_r", "foot_r" },
-        					{ "pelvis", "thigh_l", "calf_l", "foot_l" }
-    					};
+                    {
+                        static std::vector<std::vector<std::string>> skeleton =
+                        {
+                            { "Head", "neck_01", "spine_03", "spine_02", "spine_01", "pelvis" },
+                            { "neck_01", "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r", "item_r" },
+                            { "neck_01", "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l", "item_l" },
+                            { "pelvis", "thigh_r", "calf_r", "foot_r" },
+                            { "pelvis", "thigh_l", "calf_l", "foot_l" }
+                        };
 
-    					for (auto& boneStructure : skeleton)
-    					{
-        					std::string lastBone;
-        for (std::string& currentBone : boneStructure)
-        {
-            if (!lastBone.empty())
-            {
-                FVector2D boneFrom, boneTo;
-                if (W2S(Player->GetBonePos(lastBone.c_str(), {}), &boneFrom) &&
-                    W2S(Player->GetBonePos(currentBone.c_str(), {}), &boneTo))
-                {
-                    HUD->DrawLine(boneFrom.X, boneFrom.Y, boneTo.X, boneTo.Y, White, 1.5f);
-                }
-            }
-            lastBone = currentBone;
-        }
-    }
+                        for (auto& boneStructure : skeleton)
+                        {
+                            std::string lastBone;
+                            for (std::string& currentBone : boneStructure)
+                            {
+                                if (!lastBone.empty())
+                                {
+                                    FVector2D boneFrom, boneTo;
+                                    if (W2S(Player->GetBonePos(lastBone.c_str(), {}), &boneFrom) &&
+                                        W2S(Player->GetBonePos(currentBone.c_str(), {}), &boneTo))
+                                    {
+                                        HUD->DrawLine(boneFrom.X, boneFrom.Y, boneTo.X, boneTo.Y, White, 1.5f);
+                                    }
+                                }
+                                lastBone = currentBone;
+                            }
+                        }
 
-    // Draw circle on head as before
-    FVector head3D = Player->GetBonePos("Head", {});
-    FVector2D headPos2D;
-    if (W2S(head3D, &headPos2D))
-    {
-        FVector top3D = head3D;
-        top3D.Z += 15.0f;
-        FVector2D top2D;
-        if (W2S(top3D, &top2D))
-        {
-            float radius = FVector2D::Distance(headPos2D, top2D);
-            DrawCircleHelper(HUD, headPos2D.X, headPos2D.Y, radius, White, 36, 1.5f);
-        }
-    }
-}
+                        FVector head3D = Player->GetBonePos("Head", {});
+                        FVector2D headPos2D;
+                        if (W2S(head3D, &headPos2D))
+                        {
+                            FVector top3D = head3D;
+                            top3D.Z += 15.0f;
+                            FVector2D top2D;
+                            if (W2S(top3D, &top2D))
+                            {
+                                float radius = FVector2D::Distance(headPos2D, top2D);
+                                DrawCircleHelper(HUD, headPos2D.X, headPos2D.Y, radius, White, 36, 1.5f);
+                            }
+                        }
+                    }
 
                     float height = fabs(RootPosSC.Y - headPosSC.Y);
                     float extraTop = height * 0.10f;
@@ -258,8 +220,8 @@ void DrawHUD(AHUD* HUD)
                     tslFont->LegacyFontSize = TSL_FONT_DEFAULT_SIZE;
                 }
             }
-			
-			if (Cheat::Esp::Throwable)
+            
+            if (Cheat::Esp::Throwable)
             {
                 if (Actor->IsA(ASTExtraGrenadeBase::StaticClass()))
                 {
@@ -493,30 +455,28 @@ void DrawMemory()
             }
         }
 
-static ULocalPlayer *UlocalPlayer = nullptr;
-    if (!UlocalPlayer)
-    {
-        UlocalPlayer = UObject::FindObject<ULocalPlayer>("LocalPlayer Transient.UAEGameEngine_1.LocalPlayer_1");
-    }
-
-    if (UlocalPlayer == nullptr)
-        return;
-
-
-
-    static auto OrigView = UlocalPlayer->AspectRatioAxisConstraint;
-    if (Cheat::Memory::Wide)
-    {
-        UlocalPlayer->AspectRatioAxisConstraint = EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV;
-    }
-    else
-    {
-        if (UlocalPlayer->AspectRatioAxisConstraint != OrigView)
+        static ULocalPlayer *UlocalPlayer = nullptr;
+        if (!UlocalPlayer)
         {
-            UlocalPlayer->AspectRatioAxisConstraint = OrigView;
+            UlocalPlayer = UObject::FindObject<ULocalPlayer>("LocalPlayer Transient.UAEGameEngine_1.LocalPlayer_1");
         }
-    }
-	
+
+        if (UlocalPlayer == nullptr)
+            return;
+
+        static auto OrigView = UlocalPlayer->AspectRatioAxisConstraint;
+        if (Cheat::Memory::Wide)
+        {
+            UlocalPlayer->AspectRatioAxisConstraint = EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV;
+        }
+        else
+        {
+            if (UlocalPlayer->AspectRatioAxisConstraint != OrigView)
+            {
+                UlocalPlayer->AspectRatioAxisConstraint = OrigView;
+            }
+        }
+        
         if (Cheat::Memory::Hit)
         {
             TriggerHitEffect();
@@ -577,24 +537,17 @@ void AutoEspOn()
     Cheat::Esp::Health = true;
     Cheat::Esp::Skeleton = true;
     Cheat::Esp::Box = true;
-	Cheat::Esp::LootBox = true;
-	Cheat::Esp::Throwable = true;
+    Cheat::Esp::LootBox = true;
+    Cheat::Esp::Throwable = true;
     Cheat::Esp::Target = true;
-	Cheat::Esp::Counter = true;
+    Cheat::Esp::Counter = true;
     Cheat::Esp::Vehicle::Name = true;
-	
-  //   Cheat::Aimbot::Enable = true;
- //   Cheat::Memory::Hit = true;
- //   Cheat::Memory::Wide = true;
-    Cheat::Memory::Skin = true;
-	
+    
     Cheat::Memory::ShowDamage = true;
-	Cheat::Memory::Small = true;
-	//Cheat::Memory::Magic = true;
-	//Cheat::Aimbot::Enable = true;
-	Cheat::BulletTrack::Enable = true;
-	Cheat::BulletTrack::Range = 600.0f;
-	
+    Cheat::Memory::Small = true;
+    Cheat::BulletTrack::Enable = true;
+    Cheat::BulletTrack::Range = 600.0f;
+    
     for (auto &i : items_data) 
     {
         int itemCount = 0;
@@ -609,90 +562,14 @@ void AutoEspOn()
     }
 }
 
-void Login()
-{
-    static bool isKeyValid = false;
-    static std::string loginResult;
-    const char* filePath = "/storage/emulated/0/Android/obb/com.pubg.imobile/Sanke.txt";
-    static char keyBuffer[64] = {0};
-
-    if (!isKeyValid)
-    {
-        std::ifstream inputFile(filePath);
-        if (inputFile.is_open())
-        {
-            std::string fileContent(
-                (std::istreambuf_iterator<char>(inputFile)),
-                std::istreambuf_iterator<char>()
-            );
-            inputFile.close();
-
-            strncpy(keyBuffer, fileContent.c_str(), sizeof(keyBuffer) - 1);
-        }
-        else
-        {
-            auto clipboardKey = getClipboardText();
-            if (!clipboardKey.empty())
-            {
-                std::ofstream outputFile(filePath);
-                if (outputFile.is_open())
-                {
-                    outputFile << clipboardKey;
-                    outputFile.close();
-                }
-
-                strncpy(keyBuffer, clipboardKey.c_str(), sizeof(keyBuffer) - 1);
-            }
-        }
-
-        if (strlen(keyBuffer) > 0)
-        {
-            loginResult = Login(keyBuffer);
-            if (loginResult == "OK")
-            {
-                isKeyValid = true;
-            } else {
-                exit(0);
-            }
-        }
-    }
-}
-
-
-void* (*oProcessEvent)(UObject*, UFunction*, void*) = nullptr;
-void* hkProcessEvent(UObject* pObj, UFunction* pFunc, void* pArgs) 
-{
-    if (!pObj || !pFunc) 
-        return oProcessEvent(pObj, pFunc, pArgs);
-
-    // Keep only ShowDamage via ProcessEvent if needed, but ReceiveDrawHUD is now direct hooked
-    auto fnc = pFunc->GetFullName();
-    if (Cheat::localPlayer && Cheat::localController && Cheat::Memory::ShowDamage && fnc.find("ClientOnDamageToOther") != std::string::npos) 
-    {
-        auto localContrller = reinterpret_cast<ASTExtraPlayerController*>(pObj);
-        auto Params = reinterpret_cast<ASTExtraPlayerController_ClientOnDamageToOther_Params*>(pArgs);
-        if (Params) 
-        {
-            float damage = Params->_DamageToOther;
-            if (auto HUD = reinterpret_cast<ASurviveHUD*>(localContrller->MyHUD)) 
-            {
-                HUD->AddHitDamageNumberWithConfig(damage, Cheat::localPlayer, Cheat::localController, 0, 1, 1, 1);
-            }
-        }
-    }
-    return oProcessEvent(pObj, pFunc, pArgs);
-}
-
 // Direct ReceiveDrawHUD hook at offset 0xafc6044 - no ProcessEvent
 void (*orig_ReceiveDrawHUD)(AHUD* hud, int SizeX, int SizeY) = nullptr;
 void hkReceiveDrawHUD(AHUD* hud, int SizeX, int SizeY)
 {
     if (hud) {
-        // ESP via HUD - same as before but now direct
         RenderESPPRIVATE(hud, SizeX, SizeY);
         DrawHUD(hud);
         DrawMemory();
-        SkinHack();
     }
     if (orig_ReceiveDrawHUD) {
         orig_ReceiveDrawHUD(hud, SizeX, SizeY);
@@ -708,22 +585,11 @@ void initOffset()
         shadowhook_hook_func_addr((void*)receiveDrawHUDAddr, (void*)hkReceiveDrawHUD, (void**)&orig_ReceiveDrawHUD);
         LOGI("ReceiveDrawHUD hooked at 0x%lx via ShadowHook (direct)", (unsigned long)Cheat::ReceiveDrawHUD_Offset);
     }
-
-    // Optional: if you still want ProcessEvent for ShowDamage, hook it via offset
-    // But per your request, we do NOT use ProcessEvent for ESP - only direct ReceiveDrawHUD
-    // If you want ShowDamage, uncomment below:
-    /*
-    uintptr_t procEventAddr = Cheat::libUE4Base + Cheat::ProcessEvent_Offset;
-    if (procEventAddr) {
-        shadowhook_hook_func_addr((void*)procEventAddr, (void*)hkProcessEvent, (void**)&oProcessEvent);
-        LOGI("ProcessEvent hooked at 0x%lx via ShadowHook for ShowDamage", (unsigned long)Cheat::ProcessEvent_Offset);
-    }
-    */
 }
 
 void *RunGame(void *) 
 {
-    // Init ShadowHook in UNIQUE mode as per usage.txt
+    // Init ShadowHook in UNIQUE mode
     shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
     LOGI("ShadowHook init done");
 
@@ -751,25 +617,13 @@ void *RunGame(void *)
 
     UObject::GUObjectArray = (FUObjectArray *)(Cheat::libUE4Base + Cheat::GUObject_Offset);
     
-    Login();
     initOffset();
-    // ShadowHook only - no A64HookFunction / DobbyHook
+
+    // BulletTrack only - ShadowHook
     shadowhook_hook_func_addr((void *)(Cheat::libUE4Base + 0x66B1FFC), (void *)shoot_event, (void **)&orig_shoot_event);
-    shadowhook_hook_func_addr((void *)(Cheat::libUE4Base + 0x5E6A910), (void *)hook__kill_message, (void **)&orig_kill_message);
 
-    // Install ImGui EGL hooks - menu only, ESP still uses DrawHUD
+    // Install ImGui EGL hooks - menu only, ESP via ReceiveDrawHUD
     InstallImGuiHooks();
-
-    // Optional: Hook your renderer function that gives EGLDisplay/EGLSurface via ConfigAttrib
-    // If you know the offset of the function you posted (ConfigAttrib,a2), set it here:
-    // Example: your function might be at libUE4Base + 0x1234567
-    // Uncomment and set correct offset:
-    // uintptr_t rendererOffset = 0x0; // TODO: set your renderer offset, e.g. 0x6XXXXXX
-    // if (rendererOffset != 0) {
-    //     InstallRendererHook(Cheat::libUE4Base + rendererOffset);
-    // }
-    // If you don't know offset, eglSwapBuffers hook alone is enough for ImGui menu.
-    // You can also hook renderer via pattern scan if needed.
 
     items_data = json::parse(JSON_ITEMS);
     AutoEspOn();
@@ -781,5 +635,4 @@ __attribute__ ((constructor))
 void _init() 
 {
     pthread_create(&t, NULL, RunGame, NULL);
-    pthread_create(&t, NULL, AntiCrack, NULL);
 }

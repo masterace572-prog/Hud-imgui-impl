@@ -131,6 +131,8 @@ using namespace SDK;
 inline bool BulletTrack = true;
 inline uintptr_t ProcessEvent = 0;
 
+inline android_app* g_App = nullptr;
+
 inline bool WriteAddr(void *addr, void *buffer, size_t length) 
 {
     unsigned long page_size = sysconf(_SC_PAGESIZE);

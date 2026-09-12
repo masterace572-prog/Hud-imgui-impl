@@ -11,8 +11,10 @@ bool g_MenuOpen = true;
 EGLBoolean (*orig_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface) = nullptr;
 __int64 (*orig_renderer)(__int64 *ConfigAttrib, int a2) = nullptr;
 int32_t (*orig_onInputEvent)(struct android_app* app, AInputEvent* event) = nullptr;
+int (*orig_AInputQueue_getEvent)(AInputQueue* queue, AInputEvent** outEvent) = nullptr;
 
 static bool g_InputHookInstalled = false;
+static bool g_EglHookInstalled = false;
 static int g_MenuTab = 0; // 0=ESP, 1=Aim, 2=Memory, 3=Items, 4=Settings
 
 // Style setup - similar to your IMGUI example but keeping HUD ESP
@@ -129,24 +131,41 @@ void ShutdownImGui() {
 // Input hook - like your IMGUI example: passes screen_scale
 int32_t hook_onInputEvent(struct android_app* app, AInputEvent* event) {
     if (g_ImGuiInitialized && event) {
-        // Calculate scale like example: screenWidth/glWidth, screenHeight/glHeight
         float sx = 1.0f, sy = 1.0f;
         if (glWidth > 0 && screenWidth > 0) sx = (float)screenWidth / (float)glWidth;
         if (glHeight > 0 && screenHeight > 0) sy = (float)screenHeight / (float)glHeight;
         ImVec2 scale = ImVec2(sx, sy);
-
-        // Your example backend signature: HandleInputEvent(event, {scale})
-        // Our backend also has same signature (checked in imgui_impl_android.cpp)
         bool handled = ImGui_ImplAndroid_HandleInputEvent(event, scale);
         ImGuiIO &io = ImGui::GetIO();
         if (g_MenuOpen && handled && io.WantCaptureMouse) {
-            return 1; // consume, don't pass to game
+            return 1;
         }
     }
     if (orig_onInputEvent) {
         return orig_onInputEvent(app, event);
     }
     return 0;
+}
+
+// Low-level input queue hook using your offset 0xD494B60 (AInputQueue_GetEvent)
+// Signature: int AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent)
+int hook_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
+    int result = -1;
+    if (orig_AInputQueue_getEvent) {
+        result = orig_AInputQueue_getEvent(queue, outEvent);
+    }
+    if (result >= 0 && outEvent && *outEvent && g_ImGuiInitialized) {
+        // Forward to ImGui with scale like example
+        float sx = 1.0f, sy = 1.0f;
+        if (glWidth > 0 && screenWidth > 0) sx = (float)screenWidth / (float)glWidth;
+        if (glHeight > 0 && screenHeight > 0) sy = (float)screenHeight / (float)glHeight;
+        ImVec2 scale = ImVec2(sx, sy);
+        ImGui_ImplAndroid_HandleInputEvent(*outEvent, scale);
+        // If menu open and ImGui wants capture, we could consume? 
+        // But AInputQueue_getEvent is expected to return event, so we don't block here
+        // Blocking is done in onInputEvent hook
+    }
+    return result;
 }
 
 // Menu only - no ESP draw via ImGui drawlist, ESP stays in DrawHUD
@@ -334,6 +353,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         return EGL_FALSE;
     }
 
+    // Ensure input hook installed (in case g_App was null earlier)
+    if (!g_InputHookInstalled) InstallInputHooks();
+
     screenWidth = ANativeWindow_getWidth(g_App->window);
     screenHeight = ANativeWindow_getHeight(g_App->window);
     density = AConfiguration_getDensity(g_App->config);
@@ -413,16 +435,52 @@ void InstallRendererHook(uintptr_t rendererAddr) {
     else LOGI("Renderer hook failed at %p res=%d", (void*)rendererAddr, res);
 }
 
-void InstallImGuiHooks() {
-    void* libEGL = dlopen("libEGL.so", RTLD_NOW);
-    if (!libEGL) libEGL = dlopen("libGLESv2.so", RTLD_NOW);
-    if (libEGL) {
-        void* sym = dlsym(libEGL, "eglSwapBuffers");
-        if (sym && !orig_eglSwapBuffers) {
-            DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-            LOGI("eglSwapBuffers hooked at %p", sym);
-        }
-    } else {
-        LOGI("dlopen libEGL failed");
+void InstallInputHooks() {
+    if (g_App && !g_InputHookInstalled) {
+        if (g_App->onInputEvent) orig_onInputEvent = g_App->onInputEvent;
+        g_App->onInputEvent = hook_onInputEvent;
+        g_InputHookInstalled = true;
+        LOGI("[ImGui] Installed onInputEvent hook orig %p", orig_onInputEvent);
     }
+}
+
+void InstallImGuiHooks() {
+    // Hook via libUE4Base + offsets provided: eglSwapBuffers 0xD495D50, AInputQueue_GetEvent 0xD494B60
+    if (Cheat::libUE4Base != 0) {
+        if (!g_EglHookInstalled) {
+            uintptr_t eglAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
+            LOGI("[ImGui] Hooking eglSwapBuffers via base+0x%llx @ %p", (unsigned long long)Cheat::eglSwapBuffers_Offset, (void*)eglAddr);
+            if (DobbyHook((void*)eglAddr, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers) == 0) {
+                g_EglHookInstalled = true;
+                LOGI("[ImGui] eglSwapBuffers hooked via offset");
+            } else {
+                LOGI("[ImGui] eglSwapBuffers offset hook failed, trying dlsym fallback");
+            }
+        }
+        // Hook AInputQueue_getEvent
+        uintptr_t inputAddr = Cheat::libUE4Base + Cheat::AInputQueue_GetEvent_Offset;
+        if (!orig_AInputQueue_getEvent) {
+            LOGI("[ImGui] Hooking AInputQueue_getEvent via base+0x%llx @ %p", (unsigned long long)Cheat::AInputQueue_GetEvent_Offset, (void*)inputAddr);
+            DobbyHook((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
+        }
+    }
+
+    // Fallback to dlsym if offset hook not done
+    if (!g_EglHookInstalled) {
+        void* libEGL = dlopen("libEGL.so", RTLD_NOW);
+        if (!libEGL) libEGL = dlopen("libGLESv2.so", RTLD_NOW);
+        if (libEGL) {
+            void* sym = dlsym(libEGL, "eglSwapBuffers");
+            if (sym && !orig_eglSwapBuffers) {
+                if (DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers) == 0) {
+                    g_EglHookInstalled = true;
+                    LOGI("[ImGui] eglSwapBuffers hooked via dlsym %p", sym);
+                }
+            }
+        } else {
+            LOGI("[ImGui] dlopen libEGL failed");
+        }
+    }
+
+    InstallInputHooks();
 }

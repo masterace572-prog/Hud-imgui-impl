@@ -20,11 +20,15 @@ enum EAimTrigger
 namespace Cheat 
 {
     inline uintptr_t libUE4Base = 0;
-    inline uintptr_t GName_Offest = 0x8103904;
-    inline uintptr_t GUObject_Offset = 0xDD91FA0;
-    inline uintptr_t GNativeAndroidApp_Offset = 0xDAD0280;
-    inline uintptr_t ActorArray_Offest = 0x9E70E64;
+    inline uintptr_t GName_Offest = 0x8be1bfc;
+    inline uintptr_t GUObject_Offset = 0xf360880;
+    inline uintptr_t GNativeAndroidApp_Offset = 0xf08f3a8;
+    inline uintptr_t ActorArray_Offest = 0xa98c458;
     inline uintptr_t ProcessEvent = 0;
+    inline uintptr_t ProcessEvent_Offset = 0x8e5753c;
+    inline uintptr_t ReceiveDrawHUD_Offset = 0xafc6044;
+    inline uintptr_t AInputQueue_GetEvent_Offset = 0xD494B60;
+    inline uintptr_t eglSwapBuffers_Offset = 0xD495D50;
 
     inline SDK::ASTExtraPlayerCharacter *localPlayer = nullptr;
     inline SDK::ASTExtraPlayerController *localController = nullptr;

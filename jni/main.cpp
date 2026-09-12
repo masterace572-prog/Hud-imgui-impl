@@ -701,10 +701,15 @@ void* hkProcessEvent(UObject* pObj, UFunction* pFunc, void* pArgs)
 
 void initOffset() 
 {
-    ProcessEvent = (Cheat::libUE4Base + 0x8366310);
+    // Use new offsets provided: Process_Event_Offset 0x8e5753c, ReceiveDrawHUD 0xafc6044
+    ProcessEvent = (Cheat::libUE4Base + Cheat::ProcessEvent_Offset);
     if (ProcessEvent) 
     {
-        HOOK_LIB("libUE4.so","0x8366310",hkProcessEvent,oProcessEvent);
+        // Hook ProcessEvent to get ReceiveDrawHUD
+        char offsetStr[32];
+        sprintf(offsetStr, "0x%lx", (unsigned long)Cheat::ProcessEvent_Offset);
+        HOOK_LIB("libUE4.so", offsetStr, hkProcessEvent, oProcessEvent);
+        LOGI("ProcessEvent hooked at 0x%lx", (unsigned long)Cheat::ProcessEvent_Offset);
     }
 }
 

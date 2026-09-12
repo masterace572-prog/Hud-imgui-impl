@@ -2,7 +2,7 @@
 
 #include <map>
 #include <jni.h>
-#include "Dobby/dobby.h"
+#include <shadowhook.h>
 
 uintptr_t getBaseAddress(std::string_view name);
 uintptr_t getEndAddress(std::string_view name);

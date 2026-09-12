@@ -430,9 +430,10 @@ __int64 hook_renderer(__int64 *ConfigAttrib, int a2) {
 void InstallRendererHook(uintptr_t rendererAddr) {
     if (rendererAddr == 0) return;
     if (orig_renderer != nullptr) return;
-    int res = DobbyHook((void*)rendererAddr, (void*)hook_renderer, (void**)&orig_renderer);
-    if (res == 0) LOGI("Renderer hook installed at %p", (void*)rendererAddr);
-    else LOGI("Renderer hook failed at %p res=%d", (void*)rendererAddr, res);
+    // ShadowHook only
+    void* stub = shadowhook_hook_func_addr((void*)rendererAddr, (void*)hook_renderer, (void**)&orig_renderer);
+    if (stub) LOGI("Renderer hook installed at %p via ShadowHook", (void*)rendererAddr);
+    else LOGI("Renderer hook failed at %p via ShadowHook err=%d", (void*)rendererAddr, shadowhook_get_errno());
 }
 
 void InstallInputHooks() {
@@ -446,35 +447,38 @@ void InstallInputHooks() {
 
 void InstallImGuiHooks() {
     // Hook via libUE4Base + offsets provided: eglSwapBuffers 0xD495D50, AInputQueue_GetEvent 0xD494B60
+    // ShadowHook only
     if (Cheat::libUE4Base != 0) {
         if (!g_EglHookInstalled) {
             uintptr_t eglAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
-            LOGI("[ImGui] Hooking eglSwapBuffers via base+0x%llx @ %p", (unsigned long long)Cheat::eglSwapBuffers_Offset, (void*)eglAddr);
-            if (DobbyHook((void*)eglAddr, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers) == 0) {
+            LOGI("[ImGui] Hooking eglSwapBuffers via base+0x%llx @ %p via ShadowHook", (unsigned long long)Cheat::eglSwapBuffers_Offset, (void*)eglAddr);
+            void* stub = shadowhook_hook_func_addr((void*)eglAddr, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+            if (stub) {
                 g_EglHookInstalled = true;
-                LOGI("[ImGui] eglSwapBuffers hooked via offset");
+                LOGI("[ImGui] eglSwapBuffers hooked via offset ShadowHook");
             } else {
-                LOGI("[ImGui] eglSwapBuffers offset hook failed, trying dlsym fallback");
+                LOGI("[ImGui] eglSwapBuffers offset hook failed via ShadowHook err=%d, trying dlsym fallback", shadowhook_get_errno());
             }
         }
         // Hook AInputQueue_getEvent
         uintptr_t inputAddr = Cheat::libUE4Base + Cheat::AInputQueue_GetEvent_Offset;
         if (!orig_AInputQueue_getEvent) {
-            LOGI("[ImGui] Hooking AInputQueue_getEvent via base+0x%llx @ %p", (unsigned long long)Cheat::AInputQueue_GetEvent_Offset, (void*)inputAddr);
-            DobbyHook((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
+            LOGI("[ImGui] Hooking AInputQueue_getEvent via base+0x%llx @ %p via ShadowHook", (unsigned long long)Cheat::AInputQueue_GetEvent_Offset, (void*)inputAddr);
+            shadowhook_hook_func_addr((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
         }
     }
 
-    // Fallback to dlsym if offset hook not done
+    // Fallback to dlsym if offset hook not done - also via ShadowHook
     if (!g_EglHookInstalled) {
         void* libEGL = dlopen("libEGL.so", RTLD_NOW);
         if (!libEGL) libEGL = dlopen("libGLESv2.so", RTLD_NOW);
         if (libEGL) {
             void* sym = dlsym(libEGL, "eglSwapBuffers");
             if (sym && !orig_eglSwapBuffers) {
-                if (DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers) == 0) {
+                void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+                if (stub) {
                     g_EglHookInstalled = true;
-                    LOGI("[ImGui] eglSwapBuffers hooked via dlsym %p", sym);
+                    LOGI("[ImGui] eglSwapBuffers hooked via dlsym %p ShadowHook", sym);
                 }
             }
         } else {

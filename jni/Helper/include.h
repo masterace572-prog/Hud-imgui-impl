@@ -45,6 +45,7 @@
 #include <cassert>
 #include <fcntl.h>
 #include <unistd.h>
+#include <shadowhook.h>
 #define _BYTE uint8_t
 #define _WORD uint16_t
 #define _DWORD uint32_t

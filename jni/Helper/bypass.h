@@ -178,8 +178,13 @@ void *AntiSemx(void *)
     } 
     while (!isLibraryLoaded(targetLibName));
 
-HOOK_LIB_NO_ORIG("libUE4.so","0xC23FA50", StrlenSkinsByRik);
-return NULL;
+    // ShadowHook only - hook StrlenSkinsByRik via offset 0xC23FA50 in libUE4.so
+    uintptr_t base = Tools::GetBaseAddress("libUE4.so");
+    while (!base) { sleep(1); base = Tools::GetBaseAddress("libUE4.so"); }
+    void* target = (void*)(base + 0xC23FA50);
+    shadowhook_hook_func_addr(target, (void*)StrlenSkinsByRik, nullptr);
+    LOGI("StrlenSkinsByRik hooked via ShadowHook at %p", target);
+    return NULL;
 }
 
 

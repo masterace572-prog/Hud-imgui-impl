@@ -1,0 +1,12 @@
+in jni/Helper/include.h
+
+add above
+
+#include <shadowhook/shadowhook.h>
+
+
+
+in main cpp replace And64InlineHook or any hook add these
+
+shadowhook_init(shadowhook_mode_t::SHADOWHOOK_MODE_UNIQUE, 0);
+       shadowhook_hook_func_addr((void *)(Cheat::libUE4Base + 0x9FA1C34), (void *)hkProcessEvent, (void **)&oProcessEvent);

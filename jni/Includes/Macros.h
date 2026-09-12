@@ -11,14 +11,12 @@
 #include <Substrate/CydiaSubstrate.h>
 
 #endif
+#include <shadowhook.h>
 
 inline void hook(void *offset, void* ptr, void **orig)
 {
-#if defined(__aarch64__)
-    A64HookFunction(offset, ptr, orig);
-#else
-    MSHookFunction(offset, ptr, orig);
-#endif
+    // ShadowHook only - as per user request
+    shadowhook_hook_func_addr(offset, ptr, orig);
 }
 
 #define HOOK(offset, ptr, orig) hook((void *)getAbsoluteAddress(targetLibName, string2Offset(OBFUSCATE(offset))), (void *)ptr, (void **)&orig)

@@ -101,6 +101,12 @@ LOCAL_SRC_FILES := $(PREBUILT_DIR)/And64InlineHook/And64InlineHook.a
 include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := shadowhook
+LOCAL_SRC_FILES := ../shadowhook/libshadowhook.a
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/../shadowhook
+include $(PREBUILT_STATIC_LIBRARY)
+
+include $(CLEAR_VARS)
 LOCAL_MODULE    := GVoicePlugin
                    
 LOCAL_CFLAGS := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w
@@ -114,6 +120,7 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)/curl/curl-android-$(TARGET_ARCH_ABI)/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/curl/openssl-android-$(TARGET_ARCH_ABI)/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/imgui
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/Dobby/include
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../shadowhook
 
 LOCAL_SRC_FILES :=  main.cpp \
         ImGuiMenu.cpp \
@@ -134,6 +141,6 @@ LOCAL_CPP_FEATURES := exceptions
 
 LOCAL_LDLIBS := -llog -landroid -lEGL -lGLESv2 -lGLESv3 -lGLESv1_CM -lz
 
-LOCAL_STATIC_LIBRARIES := libdobby libcurl libssl libcrypto And64InlineHook ElfImg fake_dlfcn android_native_app_glue plthook_elf tools base64 SubstrateDebug SubstrateHook hde64 SubstratePosixMemory KittyMemory MemoryPatch MemoryBackup KittyUtils
+LOCAL_STATIC_LIBRARIES := libdobby libcurl libssl libcrypto And64InlineHook ElfImg fake_dlfcn android_native_app_glue plthook_elf tools base64 SubstrateDebug SubstrateHook hde64 SubstratePosixMemory KittyMemory MemoryPatch MemoryBackup KittyUtils shadowhook
 
 include $(BUILD_SHARED_LIBRARY)

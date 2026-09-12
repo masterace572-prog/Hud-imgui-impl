@@ -702,22 +702,21 @@ void* hkProcessEvent(UObject* pObj, UFunction* pFunc, void* pArgs)
 void initOffset() 
 {
     // Use new offsets provided: Process_Event_Offset 0x8e5753c, ReceiveDrawHUD 0xafc6044
+    // ShadowHook only
     ProcessEvent = (Cheat::libUE4Base + Cheat::ProcessEvent_Offset);
     if (ProcessEvent) 
     {
-        // Direct hook without OBFUSCATE macro (OBFUSCATE needs literal)
-        if (DobbyHook((void*)ProcessEvent, (void*)hkProcessEvent, (void**)&oProcessEvent) == 0) {
-            LOGI("ProcessEvent hooked at 0x%lx via Dobby", (unsigned long)Cheat::ProcessEvent_Offset);
-        } else {
-            // Fallback via A64HookFunction
-            A64HookFunction((void*)ProcessEvent, (void*)hkProcessEvent, (void**)&oProcessEvent);
-            LOGI("ProcessEvent hooked at 0x%lx via A64Hook", (unsigned long)Cheat::ProcessEvent_Offset);
-        }
+        shadowhook_hook_func_addr((void*)ProcessEvent, (void*)hkProcessEvent, (void**)&oProcessEvent);
+        LOGI("ProcessEvent hooked at 0x%lx via ShadowHook", (unsigned long)Cheat::ProcessEvent_Offset);
     }
 }
 
 void *RunGame(void *) 
 {
+    // Init ShadowHook in UNIQUE mode as per usage.txt
+    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
+    LOGI("ShadowHook init done");
+
     Cheat::libUE4Base = Tools::GetBaseAddress("libUE4.so");
 
     while (!Cheat::libUE4Base) 
@@ -744,10 +743,9 @@ void *RunGame(void *)
     
     Login();
     initOffset();
-    	A64HookFunction((void *)(Cheat::libUE4Base + 0x66B1FFC), (void *)shoot_event, (void **)&orig_shoot_event);
-	A64HookFunction((void *)(Cheat::libUE4Base + 0x5E6A910), (void *)hook__kill_message, (void **)&orig_kill_message);
-	
-	//DobbyHook((void *)(Cheat::libUE4Base + 0x62F9640), (void *)shoot_event, (void **)&orig_shoot_event);
+    // ShadowHook only - no A64HookFunction / DobbyHook
+    shadowhook_hook_func_addr((void *)(Cheat::libUE4Base + 0x66B1FFC), (void *)shoot_event, (void **)&orig_shoot_event);
+    shadowhook_hook_func_addr((void *)(Cheat::libUE4Base + 0x5E6A910), (void *)hook__kill_message, (void **)&orig_kill_message);
 
     // Install ImGui EGL hooks - menu only, ESP still uses DrawHUD
     InstallImGuiHooks();

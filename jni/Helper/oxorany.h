@@ -1,3 +1,4 @@
+#pragma once
 /*
 
 @author llxiaoyuan https://github.com/llxiaoyuan/oxorany

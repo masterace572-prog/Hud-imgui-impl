@@ -1,3 +1,4 @@
+#pragma once
 static std::chrono::steady_clock::time_point localPlayerDetectedTime;
 static auto t0 = std::chrono::steady_clock::now();
 static bool started = false;

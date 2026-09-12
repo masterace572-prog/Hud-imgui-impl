@@ -1,3 +1,4 @@
+#pragma once
 
 int (*orig_kill_message)(ASTExtraPlayerController* OwnerController, struct FFatalDamageParameter* FatalDamageParameter);
 int hook__kill_message(ASTExtraPlayerController* OwnerController, struct FFatalDamageParameter* FatalDamageParameter)

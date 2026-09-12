@@ -1,3 +1,4 @@
+#pragma once
 int newUAZID = 0;
 int lastUAZID = 0;
 int newDaciaID = 0;

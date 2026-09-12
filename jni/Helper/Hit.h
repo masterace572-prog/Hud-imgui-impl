@@ -1,3 +1,4 @@
+#pragma once
 bool xeffecton = false;
 double rainbowRatio = 0.0;
 

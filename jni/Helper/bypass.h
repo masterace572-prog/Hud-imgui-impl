@@ -1,3 +1,4 @@
+#pragma once
 #define targetLibName OBFUSCATE("libUE4.so")
 #define targetLibName OBFUSCATE("libanogs.so")
 #define targetLibName OBFUSCATE("libanort.so")

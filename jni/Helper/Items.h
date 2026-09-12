@@ -1,4 +1,5 @@
-std::string JSON_ITEMS = "[\n"
+#pragma once
+inline std::string JSON_ITEMS = "[\n"
                          "  {\n"
                          "    \"Items\": [\n"
                          "      {\n"

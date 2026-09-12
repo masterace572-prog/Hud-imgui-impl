@@ -1,3 +1,4 @@
+#pragma once
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>

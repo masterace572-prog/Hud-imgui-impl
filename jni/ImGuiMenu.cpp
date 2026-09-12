@@ -13,23 +13,27 @@ __int64 (*orig_renderer)(__int64 *ConfigAttrib, int a2) = nullptr;
 int32_t (*orig_onInputEvent)(struct android_app* app, AInputEvent* event) = nullptr;
 
 static bool g_InputHookInstalled = false;
+static int g_MenuTab = 0; // 0=ESP, 1=Aim, 2=Memory, 3=Items, 4=Settings
 
-// Forward for menu tabs
-static int g_MenuTab = 0; // 0=ESP, 1=Aim, 2=Memory, 3=Items
-
-// Helper to init ImGui style for mobile
+// Style setup - similar to your IMGUI example but keeping HUD ESP
 static void SetupImGuiStyle() {
     ImGuiStyle &style = ImGui::GetStyle();
+    ImGui::StyleColorsDark();
+
+    style.WindowPadding = ImVec2(7, 7);
     style.WindowRounding = 8.0f;
-    style.FrameRounding = 6.0f;
+    style.FramePadding = ImVec2(4, 4);
+    style.FrameRounding = 5.5f;
+    style.FrameBorderSize = 1.0f;
+    style.WindowBorderSize = 0.0f;
+    style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
     style.GrabRounding = 6.0f;
     style.ScrollbarRounding = 6.0f;
-    style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
 
-    // Dark theme with custom accent
-    ImGui::StyleColorsDark();
     ImVec4* colors = style.Colors;
     colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.12f, 0.94f);
+    colors[ImGuiCol_ChildBg] = ImVec4(0.09f, 0.20f, 0.35f, 0.00f); // transparent like example
+    colors[ImGuiCol_Border] = ImVec4(0.39f, 0.39f, 0.39f, 0.78f);
     colors[ImGuiCol_Header] = ImVec4(0.20f, 0.25f, 0.40f, 0.55f);
     colors[ImGuiCol_HeaderHovered] = ImVec4(0.26f, 0.35f, 0.55f, 0.80f);
     colors[ImGuiCol_HeaderActive] = ImVec4(0.20f, 0.30f, 0.50f, 1.00f);
@@ -41,18 +45,14 @@ static void SetupImGuiStyle() {
     colors[ImGuiCol_FrameBgHovered] = ImVec4(0.30f, 0.30f, 0.35f, 1.00f);
     colors[ImGuiCol_FrameBgActive] = ImVec4(0.25f, 0.35f, 0.55f, 1.00f);
 
-    // Scale for mobile density - if density available use it
+    // Scale based on density like your example does: density / 20, density / 14 etc
     float scale = 1.0f;
     if (density > 0) {
-        // density is DPI, e.g. 320, 480 etc. Base 160
         scale = density / 160.0f;
-        // clamp
         if (scale < 1.0f) scale = 1.0f;
         if (scale > 3.5f) scale = 3.5f;
-        // Slightly reduce to keep UI usable
         scale *= 0.65f;
     } else {
-        // fallback based on screen height
         if (glHeight > 0) {
             scale = glHeight / 1080.0f;
             if (scale < 1.0f) scale = 1.0f;
@@ -60,7 +60,6 @@ static void SetupImGuiStyle() {
         }
     }
     style.ScaleAllSizes(scale);
-    // Font scale
     ImGuiIO &io = ImGui::GetIO();
     io.FontGlobalScale = scale * 0.9f;
 }
@@ -76,41 +75,43 @@ bool InitImGui(EGLDisplay dpy, EGLSurface surface, ANativeWindow* window) {
     g_EglSurface = surface;
     g_EglContext = ctx;
 
-    LOGI("ImGui Init: dpy=%p surface=%p ctx=%p window=%p w=%d h=%d", dpy, surface, ctx, window, glWidth, glHeight);
+    LOGI("ImGui Menu Init: dpy=%p surface=%p ctx=%p window=%p w=%d h=%d density=%.0f", dpy, surface, ctx, window, glWidth, glHeight, density);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
-    // Enable touch / mouse
     io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
-    // For mobile, we want keyboard to not block
-    io.IniFilename = nullptr; // don't save ini to disk
+    io.IniFilename = nullptr;
 
     SetupImGuiStyle();
 
-    // Init backends
+    // Init backends - note example uses ImGui_ImplAndroid_Init() without window, but our backend needs window
     if (!ImGui_ImplAndroid_Init(window)) {
         LOGI("ImGui_ImplAndroid_Init failed");
     }
-    // Use GLES 3.0 shader
     if (!ImGui_ImplOpenGL3_Init("#version 300 es")) {
-        LOGI("ImGui_ImplOpenGL3_Init failed");
-        // Try fallback
+        LOGI("ImGui_ImplOpenGL3_Init #300 es failed, trying #100");
         ImGui_ImplOpenGL3_Init("#version 100");
     }
 
+    // Optional: load custom font like example does with PIRO_data
+    // io.Fonts->AddFontFromMemoryTTF((void*)PIRO_data, PIRO_size, 20.0f, NULL, io.Fonts->GetGlyphRangesDefault());
+    // For now use default + density scaled size
+    ImFontConfig cfg;
+    cfg.SizePixels = density > 0 ? (density / 20.0f) : 20.0f;
+    // io.Fonts->AddFontDefault(&cfg); // default already added
+
     g_ImGuiInitialized = true;
 
-    // Hook input if not yet
     if (!g_InputHookInstalled && g_App) {
         orig_onInputEvent = g_App->onInputEvent;
         g_App->onInputEvent = hook_onInputEvent;
         g_InputHookInstalled = true;
-        LOGI("ImGui input hook installed");
+        LOGI("ImGui input hook installed with scale handling");
     }
 
-    LOGI("ImGui Initialized successfully");
+    LOGI("ImGui Menu Initialized - ESP still via DrawHUD");
     return true;
 }
 
@@ -125,16 +126,21 @@ void ShutdownImGui() {
     g_EglContext = EGL_NO_CONTEXT;
 }
 
-// Input hook - forward to ImGui and optionally block game input when menu open
+// Input hook - like your IMGUI example: passes screen_scale
 int32_t hook_onInputEvent(struct android_app* app, AInputEvent* event) {
     if (g_ImGuiInitialized && event) {
-        // Let ImGui handle it
-        bool handled = ImGui_ImplAndroid_HandleInputEvent(event);
+        // Calculate scale like example: screenWidth/glWidth, screenHeight/glHeight
+        float sx = 1.0f, sy = 1.0f;
+        if (glWidth > 0 && screenWidth > 0) sx = (float)screenWidth / (float)glWidth;
+        if (glHeight > 0 && screenHeight > 0) sy = (float)screenHeight / (float)glHeight;
+        ImVec2 scale = ImVec2(sx, sy);
+
+        // Your example backend signature: HandleInputEvent(event, {scale})
+        // Our backend also has same signature (checked in imgui_impl_android.cpp)
+        bool handled = ImGui_ImplAndroid_HandleInputEvent(event, scale);
         ImGuiIO &io = ImGui::GetIO();
         if (g_MenuOpen && handled && io.WantCaptureMouse) {
-            // If menu is open and ImGui wants mouse, consume event to prevent game from handling it
-            // Check if touch is inside menu window area - we let ImGui decide via WantCapture
-            return 1;
+            return 1; // consume, don't pass to game
         }
     }
     if (orig_onInputEvent) {
@@ -143,9 +149,9 @@ int32_t hook_onInputEvent(struct android_app* app, AInputEvent* event) {
     return 0;
 }
 
+// Menu only - no ESP draw via ImGui drawlist, ESP stays in DrawHUD
 void DrawMenu() {
     if (!g_MenuOpen) {
-        // Small floating button to open menu
         ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(120, 50), ImGuiCond_FirstUseEver);
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
@@ -157,87 +163,107 @@ void DrawMenu() {
         return;
     }
 
-    // Main menu window
-    float menuW = glWidth * 0.55f;
-    float menuH = glHeight * 0.70f;
+    ImGuiIO &io = ImGui::GetIO();
+    float menuW = glWidth * 0.42f;
+    float menuH = glHeight * 0.52f;
     if (menuW < 500) menuW = 500;
-    if (menuW > 800) menuW = 800;
+    if (menuW > 850) menuW = 850;
     if (menuH < 400) menuH = 400;
     if (menuH > 900) menuH = 900;
 
-    ImGui::SetNextWindowPos(ImVec2(glWidth * 0.5f - menuW * 0.5f, glHeight * 0.5f - menuH * 0.5f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_FirstUseEver);
-    ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoCollapse;
+    ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Once);
+    char titleBuf[128];
+    // Like example: FPS in title
+    sprintf(titleBuf, "SANKE MENU ~ HUD ESP ~ %.1f FPS", io.Framerate);
 
-    ImGui::Begin("SANKE CHEAT MENU", &g_MenuOpen, mainFlags);
+    ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiConfigFlags_NoMouseCursorChange;
 
-    // Tab bar
-    if (ImGui::BeginTabBar("##Tabs")) {
-        if (ImGui::BeginTabItem("ESP")) {
-            g_MenuTab = 0;
-            ImGui::Spacing();
-            ImGui::Columns(2, nullptr, false);
-            // Left column
+    if (ImGui::Begin(titleBuf, &g_MenuOpen, mainFlags)) {
+
+        // Left panel like your IMGUI example
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.6f);
+        ImGui::PushStyleColor(ImGuiCol_Border, ImColor(100, 100, 100, 200).Value);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImColor(9, 36, 89, 0).Value);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+        ImGui::BeginChild("left", ImVec2(170, 0), true);
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+
+        // Buttons like example: Player ESP, Bullet Track, Extra Features
+        if (ImGui::Button("Player ESP", ImVec2(150, 40))) g_MenuTab = 0;
+        if (ImGui::Button("Aimbot", ImVec2(150, 40))) g_MenuTab = 1;
+        if (ImGui::Button("Bullet Track", ImVec2(150, 40))) g_MenuTab = 2;
+        if (ImGui::Button("Memory", ImVec2(150, 40))) g_MenuTab = 3;
+        if (ImGui::Button("Items", ImVec2(150, 40))) g_MenuTab = 4;
+        if (ImGui::Button("Settings", ImVec2(150, 40))) g_MenuTab = 5;
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        if (ImGui::Button("Close Menu", ImVec2(150, 30))) g_MenuOpen = false;
+
+        ImGui::EndChild();
+        ImGui::SameLine();
+
+        // Right panel
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.6f);
+        ImGui::PushStyleColor(ImGuiCol_Border, ImColor(100, 100, 100, 200).Value);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImColor(9, 36, 89, 0).Value);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+        ImGui::BeginChild("mainchild", ImVec2(0, 0), true);
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+
+        if (g_MenuTab == 0) { // Player ESP - toggles for DrawHUD
+            ImGui::Text("ESP - Uses DrawHUD (not ImGui drawlist)");
+            ImGui::Separator();
             ImGui::Checkbox("Line", &Cheat::Esp::Line);
             ImGui::Checkbox("Box", &Cheat::Esp::Box);
             ImGui::Checkbox("Skeleton", &Cheat::Esp::Skeleton);
             ImGui::Checkbox("Health", &Cheat::Esp::Health);
             ImGui::Checkbox("Name", &Cheat::Esp::Name);
             ImGui::Checkbox("Distance", &Cheat::Esp::Distance);
-            ImGui::NextColumn();
             ImGui::Checkbox("Counter", &Cheat::Esp::Counter);
             ImGui::Checkbox("Target Line", &Cheat::Esp::Target);
-            ImGui::Checkbox("Vehicle", &Cheat::Esp::Vehicle::Name);
+            ImGui::Checkbox("Vehicle Name", &Cheat::Esp::Vehicle::Name);
             ImGui::Checkbox("LootBox", &Cheat::Esp::LootBox);
-            ImGui::Checkbox("Grenade", &Cheat::Esp::Throwable);
-            ImGui::Columns(1);
+            ImGui::Checkbox("Throwable (Nade)", &Cheat::Esp::Throwable);
+        } else if (g_MenuTab == 1) { // Aimbot
+            ImGui::Text("Aimbot - Uses DrawMemory aim");
             ImGui::Separator();
-            ImGui::Text("ESP keeps using DrawHUD, this menu only toggles");
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem("Aimbot")) {
-            g_MenuTab = 1;
-            ImGui::Spacing();
             ImGui::Checkbox("Aimbot Enable", &Cheat::Aimbot::Enable);
-            ImGui::Checkbox("BulletTrack Enable", &Cheat::BulletTrack::Enable);
-            ImGui::Checkbox("VisCheck", &Cheat::BulletTrack::VisCheck);
-            ImGui::Checkbox("Ignore Knock", &Cheat::BulletTrack::IgnoreKnock);
-            ImGui::Checkbox("Ignore Bot", &Cheat::BulletTrack::iGnoreBot);
-            ImGui::SliderFloat("BulletTrack Range", &Cheat::BulletTrack::Range, 50.0f, 600.0f, "%.0f");
-            ImGui::SliderFloat("BulletTrack FOV", &Cheat::BulletTrack::Fov, 10.0f, 1000.0f, "%.0f");
+            ImGui::SliderFloat("Recoil", &Cheat::Aimbot::Recoil, 0.0f, 5.0f, "%.2f");
+            ImGui::Checkbox("VisCheck", &Cheat::Aimbot::VisCheck);
+            ImGui::Checkbox("Ignore Knock", &Cheat::Aimbot::IgnoreKnock);
+        } else if (g_MenuTab == 2) { // Bullet Track - like your example
+            ImGui::Text("Bullet Track - Magic Bullet");
             ImGui::Separator();
-            ImGui::SliderFloat("Recoil Comp", &Cheat::Aimbot::Recoil, 0.0f, 5.0f, "%.2f");
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem("Memory")) {
-            g_MenuTab = 2;
-            ImGui::Spacing();
+            ImGui::Checkbox("Bullet Track", &Cheat::BulletTrack::Enable);
+            ImGui::SliderFloat("Radius", &Cheat::BulletTrack::Fov, 0.0f, 1000.0f, "%.0f");
+            ImGui::SliderFloat("Range", &Cheat::BulletTrack::Range, 0.0f, 600.0f, "%.0f");
+            ImGui::Checkbox("Visibility Check", &Cheat::BulletTrack::VisCheck);
+            ImGui::Checkbox("Ignore Knocked", &Cheat::BulletTrack::IgnoreKnock);
+            ImGui::Checkbox("Ignore Bot", &Cheat::BulletTrack::iGnoreBot);
+        } else if (g_MenuTab == 3) { // Memory
+            ImGui::Text("Memory Features");
+            ImGui::Separator();
             ImGui::Checkbox("Wide View", &Cheat::Memory::Wide);
             ImGui::Checkbox("Small Crosshair / No Recoil", &Cheat::Memory::Small);
             ImGui::Checkbox("Hit Effect", &Cheat::Memory::Hit);
             ImGui::Checkbox("Show Damage", &Cheat::Memory::ShowDamage);
             ImGui::Checkbox("Skin Hack", &Cheat::Memory::Skin);
+        } else if (g_MenuTab == 4) { // Items
+            ImGui::Text("Item ESP - Toggles for DrawHUD item loop");
             ImGui::Separator();
-            ImGui::Text("Memory features from DrawMemory");
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem("Items")) {
-            g_MenuTab = 3;
-            ImGui::Spacing();
-            if (ImGui::Button("Enable All Items")) {
-                for (auto &pair : Items) {
-                    pair.second = true;
-                }
+            if (ImGui::Button("Enable All")) {
+                for (auto &p : Items) p.second = true;
             }
             ImGui::SameLine();
-            if (ImGui::Button("Disable All Items")) {
-                for (auto &pair : Items) {
-                    pair.second = false;
-                }
+            if (ImGui::Button("Disable All")) {
+                for (auto &p : Items) p.second = false;
             }
             ImGui::Separator();
             ImGui::BeginChild("##ItemList", ImVec2(0, 0), true);
-            // Show items if items_data parsed
             int idx = 0;
             for (auto &cat : items_data) {
                 std::string catName = cat["CategoryName"].is_string() ? cat["CategoryName"].get<std::string>() : "Category";
@@ -254,106 +280,91 @@ void DrawMenu() {
                 }
             }
             ImGui::EndChild();
-            ImGui::EndTabItem();
-        }
-        if (ImGui::BeginTabItem("Settings")) {
-            ImGui::Spacing();
+        } else if (g_MenuTab == 5) { // Settings
+            ImGui::Text("Info");
+            ImGui::Separator();
             ImGui::Text("Screen: %d x %d", glWidth, glHeight);
             ImGui::Text("Window: %d x %d", screenWidth, screenHeight);
             ImGui::Text("Density: %.0f", density);
+            ImGui::Text("Menu: ImGui only, ESP via HUD");
             ImGui::Separator();
-            if (ImGui::Button("Close Menu")) {
-                g_MenuOpen = false;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Exit Cheat (Danger)")) {
-                // just close menu, not exit
-                g_MenuOpen = false;
-            }
-            ImGui::Separator();
-            ImGui::Text("Menu uses EGL hook + ImGui");
-            ImGui::Text("ESP still uses DrawHUD");
-            ImGui::EndTabItem();
+            ImGui::Text("Your example used ImGui drawlist for ESP");
+            ImGui::Text("This version keeps DrawHUD for ESP");
+            ImGui::Text("Menu toggles same bools");
         }
-        ImGui::EndTabBar();
-    }
 
+        ImGui::EndChild();
+    }
     ImGui::End();
 }
 
 void RenderImGui() {
     if (!g_ImGuiInitialized) return;
     if (g_EglDisplay == EGL_NO_DISPLAY) return;
-
-    // Ensure we have correct display size
     if (glWidth <= 0 || glHeight <= 0) return;
-
-    // Backup GL state is handled by ImGui_ImplOpenGL3
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(glWidth, glHeight);
     ImGui::NewFrame();
 
+    // NOTE: We do NOT call DrawESP with ImGui drawlist here
+    // Your example did: DrawESP(ImGui::GetBackgroundDrawList());
+    // We keep HUD ESP: DrawHUD is called via ProcessEvent hook, not here
+    // Only menu:
     DrawMenu();
 
     ImGui::Render();
-    // Get display size for viewport
     ImGuiIO &io = ImGui::GetIO();
-    // Make sure viewport is correct
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-// eglSwapBuffers hook - main render point
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // Lazy init if not initialized
+    // Same as your example: query surface, get g_App window size, density
+    eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
+    eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
+
+    if (glWidth <= 0 || glHeight <= 0) {
+        if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
+        return EGL_FALSE;
+    }
+
+    if (!g_App) {
+        if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
+        return EGL_FALSE;
+    }
+
+    screenWidth = ANativeWindow_getWidth(g_App->window);
+    screenHeight = ANativeWindow_getHeight(g_App->window);
+    density = AConfiguration_getDensity(g_App->config);
+
     if (!g_ImGuiInitialized) {
-        if (dpy != EGL_NO_DISPLAY && surface != EGL_NO_SURFACE && g_App && g_App->window) {
-            EGLContext ctx = eglGetCurrentContext();
-            if (ctx != EGL_NO_CONTEXT) {
-                // Only init if we have valid width/height
-                if (glWidth > 0 && glHeight > 0) {
-                    InitImGui(dpy, surface, g_App->window);
-                } else {
-                    // Try query surface size here as fallback
-                    EGLint w, h;
-                    if (eglQuerySurface(dpy, surface, EGL_WIDTH, &w) && eglQuerySurface(dpy, surface, EGL_HEIGHT, &h)) {
-                        glWidth = w;
-                        glHeight = h;
-                        if (w > 0 && h > 0) {
-                            InitImGui(dpy, surface, g_App->window);
-                        }
-                    }
-                }
-            }
+        EGLContext ctx = eglGetCurrentContext();
+        if (ctx != EGL_NO_CONTEXT && g_App->window) {
+            InitImGui(dpy, surface, g_App->window);
         }
     } else {
-        // Update display/surface if changed
         if (dpy != g_EglDisplay || surface != g_EglSurface) {
             g_EglDisplay = dpy;
             g_EglSurface = surface;
             g_EglContext = eglGetCurrentContext();
         }
-        // Render menu
         RenderImGui();
     }
 
-    // Call original
     if (orig_eglSwapBuffers) {
         return orig_eglSwapBuffers(dpy, surface);
     }
     return EGL_FALSE;
 }
 
-// Your requested renderer hook - using the EGL data from ConfigAttrib
-// This keeps your original logic and adds ImGui init
+// Your requested renderer hook - ConfigAttrib offsets 96,120,272
 __int64 hook_renderer(__int64 *ConfigAttrib, int a2) {
     if (!g_App || !g_App->window || !g_App->config) {
         if (orig_renderer) return orig_renderer(ConfigAttrib, a2);
         return 0;
     }
 
-    // Your original size logic
     if ( *(_DWORD *)(*(_QWORD *)ConfigAttrib + 272LL) != a2 ) {
         EGLDisplay dpy = reinterpret_cast<EGLDisplay>(*(uintptr_t *) (*ConfigAttrib + 96LL));
         EGLSurface surface = reinterpret_cast<EGLSurface>(*(uintptr_t *) (*ConfigAttrib + 120LL));
@@ -365,15 +376,11 @@ __int64 hook_renderer(__int64 *ConfigAttrib, int a2) {
         screenHeight = ANativeWindow_getHeight(g_App->window);
         density = AConfiguration_getDensity(g_App->config);
 
-        int v4;
-        v4 = glHeight;
-        if ( glHeight > a2 )
-            v4 = a2;
-        if ( glWidth > a2 )
-            v4 = glWidth;
+        int v4 = glHeight;
+        if (glHeight > a2) v4 = a2;
+        if (glWidth > a2) v4 = glWidth;
         *(_DWORD *)(*(_QWORD *)ConfigAttrib + 272LL) = v4;
 
-        // Also store for ImGui
         g_EglDisplay = dpy;
         g_EglSurface = surface;
     }
@@ -383,13 +390,9 @@ __int64 hook_renderer(__int64 *ConfigAttrib, int a2) {
         return 0;
     }
 
-    // Call original renderer first - this makes GL context current
     __int64 ret = 0;
-    if (orig_renderer) {
-        ret = orig_renderer(ConfigAttrib, a2);
-    }
+    if (orig_renderer) ret = orig_renderer(ConfigAttrib, a2);
 
-    // After original, try to init ImGui if not yet
     if (!g_ImGuiInitialized) {
         EGLDisplay dpy = reinterpret_cast<EGLDisplay>(*(uintptr_t *) (*ConfigAttrib + 96LL));
         EGLSurface surface = reinterpret_cast<EGLSurface>(*(uintptr_t *) (*ConfigAttrib + 120LL));
@@ -404,43 +407,22 @@ __int64 hook_renderer(__int64 *ConfigAttrib, int a2) {
 
 void InstallRendererHook(uintptr_t rendererAddr) {
     if (rendererAddr == 0) return;
-    if (orig_renderer != nullptr) return; // already hooked
-    // Use And64InlineHook or Dobby - try Dobby first
+    if (orig_renderer != nullptr) return;
     int res = DobbyHook((void*)rendererAddr, (void*)hook_renderer, (void**)&orig_renderer);
-    if (res == 0) {
-        LOGI("Renderer hook installed at %p", (void*)rendererAddr);
-    } else {
-        LOGI("Renderer hook failed at %p res=%d", (void*)rendererAddr, res);
-    }
+    if (res == 0) LOGI("Renderer hook installed at %p", (void*)rendererAddr);
+    else LOGI("Renderer hook failed at %p res=%d", (void*)rendererAddr, res);
 }
 
 void InstallImGuiHooks() {
-    // Hook eglSwapBuffers
     void* libEGL = dlopen("libEGL.so", RTLD_NOW);
     if (!libEGL) libEGL = dlopen("libGLESv2.so", RTLD_NOW);
     if (libEGL) {
         void* sym = dlsym(libEGL, "eglSwapBuffers");
-        if (sym) {
-            if (!orig_eglSwapBuffers) {
-                DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-                LOGI("eglSwapBuffers hooked at %p", sym);
-            }
-        } else {
-            LOGI("dlsym eglSwapBuffers failed");
+        if (sym && !orig_eglSwapBuffers) {
+            DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+            LOGI("eglSwapBuffers hooked at %p", sym);
         }
     } else {
         LOGI("dlopen libEGL failed");
-    }
-
-    // Optional: try to auto find renderer offset if libUE4Base is known
-    // The renderer function you provided is usually at some offset in libUE4.so
-    // User can call InstallRendererHook manually with known offset
-    // Example: InstallRendererHook(Cheat::libUE4Base + 0x...);
-    // We will attempt to install if Cheat::libUE4Base is already set and we know common offsets
-    if (Cheat::libUE4Base != 0) {
-        // You can add your renderer offset here if you know it
-        // For PUBG 3.3/3.4 common offsets are around 0x... This is placeholder - user should set
-        // uintptr_t possibleOffsets[] = {0x...};
-        // For now we don't auto hook, user can provide offset via config or we leave eglSwapBuffers as main render hook
     }
 }

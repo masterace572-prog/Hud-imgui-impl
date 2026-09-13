@@ -455,7 +455,7 @@ void RenderImGui() {
     // Debug log every 300 frames
     static int frameCount = 0;
     frameCount++;
-    if (frameCount % 300 == 0) {
+    if (frameCount < 10 || frameCount % 100 == 0) {
         LOGI("[ImGui] RenderImGui frame %d g_MenuOpen=%d w=%d h=%d", frameCount, g_MenuOpen, glWidth, glHeight);
     }
 
@@ -496,6 +496,12 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     screenWidth = ANativeWindow_getWidth(g_App->window);
     screenHeight = ANativeWindow_getHeight(g_App->window);
     density = AConfiguration_getDensity(g_App->config);
+
+    static int swapCount = 0;
+    swapCount++;
+    if (swapCount < 10 || swapCount % 200 == 0) {
+        LOGI("[ImGui] eglSwapBuffers called count=%d dpy=%p surf=%p w=%d h=%d init=%d", swapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized);
+    }
 
     if (!g_ImGuiInitialized) {
         EGLContext ctx = eglGetCurrentContext();

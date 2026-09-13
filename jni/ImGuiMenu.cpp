@@ -383,6 +383,7 @@ void RenderImGui() {
 }
 
 static int g_SwapCount = 0;
+static bool g_TestNoRender = true; // TEST: true = only log, no ImGui render, to check if hook itself causes hang
 static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig) {
     eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
     eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
@@ -396,7 +397,7 @@ static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig)
     if (g_App->config) density = AConfiguration_getDensity(g_App->config);
     if (!afterOrig) {
         g_SwapCount++;
-        LOGI("[ImGui] eglSwapBuffers count=%d dpy=%p surf=%p w=%d h=%d init=%d depth=%d", g_SwapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized, g_SwapDepth);
+        LOGI("[ImGui] eglSwapBuffers count=%d dpy=%p surf=%p w=%d h=%d init=%d depth=%d noRender=%d", g_SwapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized, g_SwapDepth, g_TestNoRender);
         if (!g_ImGuiInitialized) {
             EGLContext ctx = eglGetCurrentContext();
             if (ctx != EGL_NO_CONTEXT && g_App->window) InitImGui(dpy, surface, g_App->window);
@@ -406,7 +407,7 @@ static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig)
                 g_EglSurface = surface;
                 g_EglContext = eglGetCurrentContext();
             }
-            if (g_SwapDepth <= 1) RenderImGui();
+            if (!g_TestNoRender && g_SwapDepth <= 1) RenderImGui();
         }
     }
     return true;

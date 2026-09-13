@@ -447,12 +447,13 @@ void RenderImGui() {
 }
 
 // Core logic shared by both hooks - returns true if should call orig after
-static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface) {
+static int g_SwapCount = 0;
+static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig) {
     eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
     eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
 
-    if (glWidth <= 0 || glHeight <= 0) return true;
-    if (!g_App) return true;
+    if (glWidth <= 0 || glHeight <= 0) return false;
+    if (!g_App) return false;
 
     if (!g_InputHookInstalled) InstallInputHooks();
 
@@ -464,31 +465,30 @@ static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface) {
         density = AConfiguration_getDensity(g_App->config);
     }
 
-    static int swapCount = 0;
-    swapCount++;
-    if (swapCount < 20 || swapCount % 200 == 0) {
-        LOGI("[ImGui] eglSwapBuffers count=%d dpy=%p surf=%p w=%d h=%d init=%d inSwap=%d", swapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized, g_InEglSwap);
+    if (!afterOrig) {
+        g_SwapCount++;
+        LOGI("[ImGui] eglSwapBuffers count=%d dpy=%p surf=%p w=%d h=%d init=%d inSwap=%d afterOrig=%d", g_SwapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized, g_InEglSwap, afterOrig);
     }
 
     if (!g_ImGuiInitialized) {
         EGLContext ctx = eglGetCurrentContext();
         if (ctx != EGL_NO_CONTEXT && g_App->window) {
             InitImGui(dpy, surface, g_App->window);
+            // Render immediately after init in same frame if afterOrig
+            if (afterOrig && g_ImGuiInitialized) {
+                RenderImGui();
+            }
         }
-        // Don't render on same frame as init - need next frame
-        return true;
+        return false;
     } else {
         if (dpy != g_EglDisplay || surface != g_EglSurface) {
             g_EglDisplay = dpy;
             g_EglSurface = surface;
             g_EglContext = eglGetCurrentContext();
         }
-        // Only render if not already inside swap (avoid double render when wrapper calls real)
-        if (!g_InEglSwap) {
-            RenderImGui();
-        } else {
-            if (swapCount % 200 == 0) {
-                LOGI("[ImGui] Skipping double RenderImGui due to reentrancy guard");
+        if (afterOrig) {
+            if (!g_InEglSwap) {
+                RenderImGui();
             }
         }
     }
@@ -497,32 +497,39 @@ static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface) {
 
 EGLBoolean hook_eglSwapBuffers_Offset(EGLDisplay dpy, EGLSurface surface) {
     if (g_InEglSwap) {
-        // Reentrant call - just call orig offset to avoid infinite loop
+        LOGI("[ImGui] offset hook reentrant, calling orig directly");
         if (orig_eglSwapBuffers_Offset) return orig_eglSwapBuffers_Offset(dpy, surface);
         if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
         return EGL_FALSE;
     }
     g_InEglSwap = true;
-    CommonEglSwapPre(dpy, surface);
+    // Pre - init if needed
+    CommonEglSwapPre(dpy, surface, false);
     EGLBoolean res = EGL_FALSE;
     if (orig_eglSwapBuffers_Offset) res = orig_eglSwapBuffers_Offset(dpy, surface);
     else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
+    // Post - render after orig (render to next back buffer, but also try to ensure visible)
+    CommonEglSwapPre(dpy, surface, true);
     g_InEglSwap = false;
+    if (g_SwapCount < 20) LOGI("[ImGui] offset hook after orig res=%d", res);
     return res;
 }
 
 EGLBoolean hook_eglSwapBuffers_Real(EGLDisplay dpy, EGLSurface surface) {
     if (g_InEglSwap) {
+        LOGI("[ImGui] real hook reentrant, calling orig directly");
         if (orig_eglSwapBuffers_Real) return orig_eglSwapBuffers_Real(dpy, surface);
         if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
         return EGL_FALSE;
     }
     g_InEglSwap = true;
-    CommonEglSwapPre(dpy, surface);
+    CommonEglSwapPre(dpy, surface, false);
     EGLBoolean res = EGL_FALSE;
     if (orig_eglSwapBuffers_Real) res = orig_eglSwapBuffers_Real(dpy, surface);
     else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
+    CommonEglSwapPre(dpy, surface, true);
     g_InEglSwap = false;
+    if (g_SwapCount < 20) LOGI("[ImGui] real hook after orig res=%d count=%d", res, g_SwapCount);
     return res;
 }
 
@@ -624,36 +631,44 @@ void InstallImGuiHooks() {
 
     // Hook real eglSwapBuffers in libEGL.so as well - critical for per-frame rendering
     // Use separate hook with reentrancy guard to avoid double render when wrapper calls real
-    if (!g_EglRealHookInstalled) {
-        const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", nullptr };
-        for (int i = 0; eglLibs[i] != nullptr; ++i) {
-            void* lib = dlopen(eglLibs[i], RTLD_NOW);
-            if (!lib) continue;
-            void* sym = dlsym(lib, "eglSwapBuffers");
-            if (!sym) continue;
-            // Avoid hooking same address as offset hook
-            if (Cheat::libUE4Base != 0) {
-                uintptr_t offsetAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
-                if (sym == (void*)offsetAddr) {
-                    LOGI("[ImGui] Skipping libEGL hook for %s - same as offset addr", eglLibs[i]);
-                    continue;
-                }
+    const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", "libGLESv3.so", nullptr };
+    for (int i = 0; eglLibs[i] != nullptr; ++i) {
+        void* lib = dlopen(eglLibs[i], RTLD_NOW);
+        if (!lib) {
+            LOGI("[ImGui] dlopen %s failed", eglLibs[i]);
+            continue;
+        }
+        void* sym = dlsym(lib, "eglSwapBuffers");
+        if (!sym) {
+            LOGI("[ImGui] dlsym eglSwapBuffers not found in %s", eglLibs[i]);
+            continue;
+        }
+        // Avoid hooking same address as offset hook
+        if (Cheat::libUE4Base != 0) {
+            uintptr_t offsetAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
+            if (sym == (void*)offsetAddr) {
+                LOGI("[ImGui] Skipping libEGL hook for %s - same as offset addr", eglLibs[i]);
+                continue;
             }
-            LOGI("[ImGui] Hooking real eglSwapBuffers in %s @ %p via ShadowHook", eglLibs[i], sym);
-            void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers_Real, (void**)&orig_eglSwapBuffers_Real);
-            if (stub) {
-                g_EglRealHookInstalled = true;
-                LOGI("[ImGui] real eglSwapBuffers hooked in %s via ShadowHook stub=%p orig=%p", eglLibs[i], stub, orig_eglSwapBuffers_Real);
-                // If offset hook not installed, use real as primary orig
-                if (!g_EglHookInstalled) {
-                    orig_eglSwapBuffers = orig_eglSwapBuffers_Real;
-                    g_EglHookInstalled = true;
-                }
-                break;
-            } else {
-                int err = shadowhook_get_errno();
-                LOGI("[ImGui] real eglSwapBuffers ShadowHook in %s failed err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
+        }
+        // Check if already hooked
+        if (orig_eglSwapBuffers_Real && sym == (void*)orig_eglSwapBuffers_Real) {
+            LOGI("[ImGui] real eglSwapBuffers in %s already hooked", eglLibs[i]);
+            continue;
+        }
+        LOGI("[ImGui] Hooking real eglSwapBuffers in %s @ %p via ShadowHook", eglLibs[i], sym);
+        void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers_Real, (void**)&orig_eglSwapBuffers_Real);
+        if (stub) {
+            g_EglRealHookInstalled = true;
+            LOGI("[ImGui] real eglSwapBuffers hooked in %s via ShadowHook stub=%p orig=%p", eglLibs[i], stub, orig_eglSwapBuffers_Real);
+            if (!g_EglHookInstalled) {
+                orig_eglSwapBuffers = orig_eglSwapBuffers_Real;
+                g_EglHookInstalled = true;
             }
+            // Don't break - hook all libs to ensure per-frame catch
+        } else {
+            int err = shadowhook_get_errno();
+            LOGI("[ImGui] real eglSwapBuffers ShadowHook in %s failed err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
         }
     }
 

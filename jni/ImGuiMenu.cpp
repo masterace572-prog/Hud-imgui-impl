@@ -22,6 +22,7 @@ static bool g_EglRealHookInstalled = false;
 static int g_MenuTab = 0; // 0=ESP, 1=Aim, 2=Memory, 3=Items, 4=Settings
 
 // Reentrancy guard to avoid double RenderImGui when wrapper calls real eglSwapBuffers
+static thread_local int g_SwapDepth = 0;
 static thread_local bool g_InEglSwap = false;
 
 // Style setup
@@ -478,15 +479,15 @@ static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig)
 
     if (!afterOrig) {
         g_SwapCount++;
-        LOGI("[ImGui] eglSwapBuffers count=%d dpy=%p surf=%p w=%d h=%d init=%d inSwap=%d afterOrig=%d", g_SwapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized, g_InEglSwap, afterOrig);
+        LOGI("[ImGui] eglSwapBuffers count=%d dpy=%p surf=%p w=%d h=%d init=%d depth=%d afterOrig=%d", g_SwapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized, g_SwapDepth, afterOrig);
     }
 
     if (!g_ImGuiInitialized) {
         EGLContext ctx = eglGetCurrentContext();
         if (ctx != EGL_NO_CONTEXT && g_App->window) {
             InitImGui(dpy, surface, g_App->window);
-            // Render immediately after init in same frame if afterOrig
             if (afterOrig && g_ImGuiInitialized) {
+                LOGI("[ImGui] Rendering immediately after init on same frame");
                 RenderImGui();
             }
         }
@@ -498,8 +499,11 @@ static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig)
             g_EglContext = eglGetCurrentContext();
         }
         if (afterOrig) {
-            if (!g_InEglSwap) {
+            // Render even if depth==1 (outer), skip only if nested >1
+            if (g_SwapDepth <= 1) {
                 RenderImGui();
+            } else {
+                LOGI("[ImGui] Skipping render due to depth %d", g_SwapDepth);
             }
         }
     }
@@ -507,40 +511,48 @@ static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig)
 }
 
 EGLBoolean hook_eglSwapBuffers_Offset(EGLDisplay dpy, EGLSurface surface) {
-    if (g_InEglSwap) {
-        LOGI("[ImGui] offset hook reentrant, calling orig directly");
-        if (orig_eglSwapBuffers_Offset) return orig_eglSwapBuffers_Offset(dpy, surface);
-        if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
-        return EGL_FALSE;
-    }
+    g_SwapDepth++;
     g_InEglSwap = true;
-    // Pre - init if needed
+    if (g_SwapDepth > 1) {
+        LOGI("[ImGui] offset hook reentrant depth=%d, calling orig directly", g_SwapDepth);
+        EGLBoolean res = EGL_FALSE;
+        if (orig_eglSwapBuffers_Offset) res = orig_eglSwapBuffers_Offset(dpy, surface);
+        else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
+        g_SwapDepth--;
+        if (g_SwapDepth == 0) g_InEglSwap = false;
+        return res;
+    }
     CommonEglSwapPre(dpy, surface, false);
     EGLBoolean res = EGL_FALSE;
     if (orig_eglSwapBuffers_Offset) res = orig_eglSwapBuffers_Offset(dpy, surface);
     else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
-    // Post - render after orig (render to next back buffer, but also try to ensure visible)
     CommonEglSwapPre(dpy, surface, true);
-    g_InEglSwap = false;
-    if (g_SwapCount < 20) LOGI("[ImGui] offset hook after orig res=%d", res);
+    g_SwapDepth--;
+    if (g_SwapDepth == 0) g_InEglSwap = false;
+    if (g_SwapCount < 20) LOGI("[ImGui] offset hook after orig res=%d count=%d depth=%d", res, g_SwapCount, g_SwapDepth);
     return res;
 }
 
 EGLBoolean hook_eglSwapBuffers_Real(EGLDisplay dpy, EGLSurface surface) {
-    if (g_InEglSwap) {
-        LOGI("[ImGui] real hook reentrant, calling orig directly");
-        if (orig_eglSwapBuffers_Real) return orig_eglSwapBuffers_Real(dpy, surface);
-        if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
-        return EGL_FALSE;
-    }
+    g_SwapDepth++;
     g_InEglSwap = true;
+    if (g_SwapDepth > 1) {
+        LOGI("[ImGui] real hook reentrant depth=%d, calling orig directly", g_SwapDepth);
+        EGLBoolean res = EGL_FALSE;
+        if (orig_eglSwapBuffers_Real) res = orig_eglSwapBuffers_Real(dpy, surface);
+        else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
+        g_SwapDepth--;
+        if (g_SwapDepth == 0) g_InEglSwap = false;
+        return res;
+    }
     CommonEglSwapPre(dpy, surface, false);
     EGLBoolean res = EGL_FALSE;
     if (orig_eglSwapBuffers_Real) res = orig_eglSwapBuffers_Real(dpy, surface);
     else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
     CommonEglSwapPre(dpy, surface, true);
-    g_InEglSwap = false;
-    if (g_SwapCount < 20) LOGI("[ImGui] real hook after orig res=%d count=%d", res, g_SwapCount);
+    g_SwapDepth--;
+    if (g_SwapDepth == 0) g_InEglSwap = false;
+    if (g_SwapCount < 20) LOGI("[ImGui] real hook after orig res=%d count=%d depth=%d", res, g_SwapCount, g_SwapDepth);
     return res;
 }
 

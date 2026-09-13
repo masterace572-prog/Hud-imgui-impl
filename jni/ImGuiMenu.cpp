@@ -90,6 +90,7 @@ bool InitImGui(EGLDisplay dpy, EGLSurface surface, ANativeWindow* window) {
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
+    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
     io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
     io.IniFilename = nullptr;
 
@@ -97,12 +98,12 @@ bool InitImGui(EGLDisplay dpy, EGLSurface surface, ANativeWindow* window) {
 
     bool androidInit = ImGui_ImplAndroid_Init(window);
     LOGI("ImGui_ImplAndroid_Init ret=%d", androidInit);
-    bool glInit300 = ImGui_ImplOpenGL3_Init("#version 300 es");
-    LOGI("ImGui_ImplOpenGL3_Init #300 es ret=%d", glInit300);
-    if (!glInit300) {
-        LOGI("ImGui_ImplOpenGL3_Init #300 es failed, trying #100");
-        bool glInit100 = ImGui_ImplOpenGL3_Init("#version 100");
-        LOGI("ImGui_ImplOpenGL3_Init #100 ret=%d", glInit100);
+    // Force #version 100 for max compatibility, fallback to 300 es
+    bool glInit100 = ImGui_ImplOpenGL3_Init("#version 100");
+    LOGI("ImGui_ImplOpenGL3_Init #100 ret=%d", glInit100);
+    if (!glInit100) {
+        bool glInit300 = ImGui_ImplOpenGL3_Init("#version 300 es");
+        LOGI("ImGui_ImplOpenGL3_Init #300 es ret=%d", glInit300);
     }
 
     g_ImGuiInitialized = true;
@@ -165,25 +166,31 @@ int hook_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
 void DrawMenu() {
     static int drawCount = 0;
     drawCount++;
-    if (drawCount < 10 || drawCount % 300 == 0) {
+    if (drawCount < 10 || drawCount % 100 == 0) {
         LOGI("[ImGui] DrawMenu count %d tab=%d open=%d", drawCount, g_MenuTab, g_MenuOpen);
     }
 
-    // Red rect test first 10 frames to verify rendering works
-    if (drawCount <= 10) {
+    // Red rect test - use ForegroundDrawList to be on top, and also Background
+    if (drawCount <= 20) {
+        ImDrawList* fg = ImGui::GetForegroundDrawList();
+        if (fg) {
+            fg->AddRectFilled(ImVec2(0, 0), ImVec2(800, 800), IM_COL32(255, 0, 0, 255));
+            fg->AddText(ImVec2(20, 20), IM_COL32(255, 255, 255, 255), "SANKE TEST - FOREGROUND RED 800x800");
+        }
         ImDrawList* bg = ImGui::GetBackgroundDrawList();
         if (bg) {
-            bg->AddRectFilled(ImVec2(100, 100), ImVec2(600, 600), IM_COL32(255, 0, 0, 200));
-            bg->AddText(ImVec2(110, 110), IM_COL32(255, 255, 255, 255), "SANKE TEST - MENU SHOULD SHOW");
+            bg->AddRectFilled(ImVec2(100, 100), ImVec2(600, 600), IM_COL32(0, 255, 0, 200));
+            bg->AddText(ImVec2(110, 110), IM_COL32(255, 255, 255, 255), "SANKE TEST - BACKGROUND GREEN 500x500");
         }
     }
 
     if (!g_MenuOpen) {
-        ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(120, 50), ImGuiCond_Always);
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(200, 80), ImGuiCond_Always);
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
         ImGui::Begin("##ToggleMenu", nullptr, flags);
-        if (ImGui::Button("Menu", ImVec2(100, 35))) {
+        ImGui::Text("MENU HIDDEN");
+        if (ImGui::Button("Show Menu", ImVec2(180, 50))) {
             g_MenuOpen = true;
         }
         ImGui::End();
@@ -191,20 +198,24 @@ void DrawMenu() {
     }
 
     ImGuiIO &io = ImGui::GetIO();
-    float menuW = glWidth * 0.42f;
-    float menuH = glHeight * 0.52f;
-    if (menuW < 500) menuW = 500;
-    if (menuW > 850) menuW = 850;
-    if (menuH < 400) menuH = 400;
-    if (menuH > 900) menuH = 900;
-
-    ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Always);
+    // Force visible position 0,0 for debugging
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
     char titleBuf[128];
-    sprintf(titleBuf, "SANKE MENU ~ HUD ESP ~ %.1f FPS", io.Framerate);
-    ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar;
+    sprintf(titleBuf, "SANKE MENU DEBUG FPS %.1f - SHOULD BE VISIBLE AT 0,0", io.Framerate);
+    ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoScrollbar;
 
     if (ImGui::Begin(titleBuf, &g_MenuOpen, mainFlags)) {
+        ImGui::Text("IF YOU SEE THIS, MENU WORKS! w=%d h=%d", glWidth, glHeight);
+        ImGui::Text("Density %.0f", density);
+        ImGui::Separator();
+        if (ImGui::Button("Close Menu", ImVec2(200, 50))) g_MenuOpen = false;
+        ImGui::SameLine();
+        if (ImGui::Button("Test Button", ImVec2(200, 50))) {
+            LOGI("[ImGui] Test button clicked");
+        }
+        ImGui::Separator();
+
         ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.6f);
         ImGui::PushStyleColor(ImGuiCol_Border, ImColor(100, 100, 100, 200).Value);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImColor(9, 36, 89, 0).Value);
@@ -433,9 +444,27 @@ void RenderImGui() {
 
     ImGuiIO &io = ImGui::GetIO();
     io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
+    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 
-    // Backup GL errors
+    // Make sure context is current
+    if (g_EglDisplay != EGL_NO_DISPLAY && g_EglSurface != EGL_NO_SURFACE && g_EglContext != EGL_NO_CONTEXT) {
+        eglMakeCurrent(g_EglDisplay, g_EglSurface, g_EglSurface, g_EglContext);
+    }
+
     while (glGetError() != GL_NO_ERROR) {}
+
+    // Backup GL state that might clip ImGui
+    GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+    GLboolean stencilEnabled = glIsEnabled(GL_STENCIL_TEST);
+    GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    if (scissorEnabled) glDisable(GL_SCISSOR_TEST);
+    if (depthEnabled) glDisable(GL_DEPTH_TEST);
+    if (stencilEnabled) glDisable(GL_STENCIL_TEST);
+    if (cullEnabled) glDisable(GL_CULL_FACE);
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(glWidth, glHeight);
@@ -445,12 +474,20 @@ void RenderImGui() {
 
     ImGui::Render();
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-    // Try to ensure blend enabled for ImGui
     GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
     if (!blendWasEnabled) glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_SCISSOR_TEST);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     if (!blendWasEnabled) glDisable(GL_BLEND);
+
+    // Restore
+    if (scissorEnabled) glEnable(GL_SCISSOR_TEST);
+    if (depthEnabled) glEnable(GL_DEPTH_TEST);
+    if (stencilEnabled) glEnable(GL_STENCIL_TEST);
+    if (cullEnabled) glEnable(GL_CULL_FACE);
+    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) {

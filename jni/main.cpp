@@ -605,6 +605,10 @@ void AutoEspOn()
     Cheat::FOV::Radius = 250.0f;
     Cheat::FOV::ShowCircle = true;
     Cheat::FOV::CircleColor = FLinearColor(0.0f, 0.5f, 1.0f, 1.0f);
+
+    Cheat::BulletTrack::HitWhere = true;
+    Cheat::BulletTrack::HitChance = false;
+    Cheat::BulletTrack::SBullet = false;
     
     // Sync aimbot and bullet track shared checks
     Cheat::Aimbot::VisCheck = true;

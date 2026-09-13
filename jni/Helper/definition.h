@@ -651,6 +651,7 @@ inline bool isInsideFOVs(int x, int y) {
 }
 
 // Globals for bone visibility - used by aimbot/bullettrack
+// English versions
 inline bool isHead = false;
 inline bool isPelvis = false;
 inline bool isNeck = false;
@@ -666,7 +667,43 @@ inline bool isLeftThigh = false;
 inline bool isRightThigh = false;
 inline bool isLeftUpperArm = false;
 inline bool isRightUpperArm = false;
+inline bool isSpine1 = false;
+inline bool isSpine2 = false;
+inline bool isSpine3 = false;
+inline bool isClavicleL = false;
+inline bool isClavicleR = false;
+inline bool isLeftShoulder = false;
+inline bool isRightShoulder = false;
+inline bool isItemL = false;
+inline bool isItemR = false;
 inline int algorithm = 0;
+
+// Chinese versions (as provided)
+inline int 算法 = 0;
+inline bool is头 = false;
+inline bool is脖子 = false;
+inline bool is盆骨 = false;
+inline bool is左上臂 = false;
+inline bool is左小臂 = false;
+inline bool is左手 = false;
+inline bool is左大腿 = false;
+inline bool is左小腿 = false;
+inline bool is左脚 = false;
+inline bool is右上臂 = false;
+inline bool is右小臂 = false;
+inline bool is右手 = false;
+inline bool is右大腿 = false;
+inline bool is右小腿 = false;
+inline bool is右脚 = false;
+inline bool is脊柱1 = false;
+inline bool is脊柱2 = false;
+inline bool is脊柱3 = false;
+inline bool is锁骨左 = false;
+inline bool is锁骨右 = false;
+inline bool is左手持物 = false;
+inline bool is右手持物 = false;
+inline bool is左肩 = false;
+inline bool is右肩 = false;
 
 inline auto GetTargetForAimBot()
 {
@@ -712,12 +749,19 @@ inline auto GetTargetForAimBot()
                         !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_l", {0,0,0}), false) &&
                         !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_r", {0,0,0}), false) &&
                         !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("calf_l", {0,0,0}), false) &&
-                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("calf_r", {0,0,0}), false))
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("calf_r", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("clavicle_l", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("clavicle_r", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("hand_l", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("hand_r", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("foot_l", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("foot_r", {0,0,0}), false))
                         continue;
 
                     // Detailed bone visibility for algorithm selection
                     bool alreadySelected = false;
                     algorithm = 0;
+                    算法 = 0;
 
                     isHead = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("Head", {0,0,0}), false);
                     isPelvis = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("pelvis", {0,0,0}), false);
@@ -734,19 +778,54 @@ inline auto GetTargetForAimBot()
                     isRightThigh = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_r", {0,0,0}), false);
                     isLeftUpperArm = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("upperarm_l", {0,0,0}), false);
                     isRightUpperArm = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("upperarm_r", {0,0,0}), false);
+                    isSpine1 = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_01", {0,0,0}), false);
+                    isSpine2 = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_02", {0,0,0}), false);
+                    isSpine3 = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_03", {0,0,0}), false);
+                    isClavicleL = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("clavicle_l", {0,0,0}), false);
+                    isClavicleR = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("clavicle_r", {0,0,0}), false);
+                    isItemL = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("item_l", {0,0,0}), false);
+                    isItemR = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("item_r", {0,0,0}), false);
+                    isLeftShoulder = isClavicleL;
+                    isRightShoulder = isClavicleR;
 
-                    if (!alreadySelected && isHead) { algorithm = 1; alreadySelected = true; }
-                    if (!alreadySelected && isPelvis) { algorithm = 2; alreadySelected = true; }
-                    if (!alreadySelected && isLeftCalf) { algorithm = 3; alreadySelected = true; }
-                    if (!alreadySelected && isRightCalf) { algorithm = 4; alreadySelected = true; }
-                    if (!alreadySelected && isLeftLowerArm) { algorithm = 5; alreadySelected = true; }
-                    if (!alreadySelected && isRightLowerArm) { algorithm = 6; alreadySelected = true; }
-                    if (!alreadySelected && isLeftUpperArm) { algorithm = 7; alreadySelected = true; }
-                    if (!alreadySelected && isRightUpperArm) { algorithm = 8; alreadySelected = true; }
-                    if (!alreadySelected && isLeftThigh) { algorithm = 9; alreadySelected = true; }
-                    if (!alreadySelected && isRightThigh) { algorithm = 10; alreadySelected = true; }
-                    if (!alreadySelected && isLeftFoot) { algorithm = 11; alreadySelected = true; }
-                    if (!alreadySelected && isRightFoot) { algorithm = 12; alreadySelected = true; }
+                    // Chinese mirrors
+                    is头 = isHead;
+                    is脖子 = isNeck;
+                    is盆骨 = isPelvis;
+                    is左上臂 = isLeftUpperArm;
+                    is左小臂 = isLeftLowerArm;
+                    is左手 = isLeftHand;
+                    is左大腿 = isLeftThigh;
+                    is左小腿 = isLeftCalf;
+                    is左脚 = isLeftFoot;
+                    is右上臂 = isRightUpperArm;
+                    is右小臂 = isRightLowerArm;
+                    is右手 = isRightHand;
+                    is右大腿 = isRightThigh;
+                    is右小腿 = isRightCalf;
+                    is右脚 = isRightFoot;
+                    is脊柱1 = isSpine1;
+                    is脊柱2 = isSpine2;
+                    is脊柱3 = isSpine3;
+                    is锁骨左 = isClavicleL;
+                    is锁骨右 = isClavicleR;
+                    is左手持物 = isItemL;
+                    is右手持物 = isItemR;
+                    is左肩 = isLeftShoulder;
+                    is右肩 = isRightShoulder;
+
+                    if (!alreadySelected && isHead) { algorithm = 1; 算法 = 1; alreadySelected = true; }
+                    if (!alreadySelected && isPelvis) { algorithm = 2; 算法 = 2; alreadySelected = true; }
+                    if (!alreadySelected && isLeftCalf) { algorithm = 3; 算法 = 3; alreadySelected = true; }
+                    if (!alreadySelected && isRightCalf) { algorithm = 4; 算法 = 4; alreadySelected = true; }
+                    if (!alreadySelected && isLeftLowerArm) { algorithm = 5; 算法 = 5; alreadySelected = true; }
+                    if (!alreadySelected && isRightLowerArm) { algorithm = 6; 算法 = 6; alreadySelected = true; }
+                    if (!alreadySelected && isLeftUpperArm) { algorithm = 7; 算法 = 7; alreadySelected = true; }
+                    if (!alreadySelected && isRightUpperArm) { algorithm = 8; 算法 = 8; alreadySelected = true; }
+                    if (!alreadySelected && isLeftThigh) { algorithm = 9; 算法 = 9; alreadySelected = true; }
+                    if (!alreadySelected && isRightThigh) { algorithm = 10; 算法 = 10; alreadySelected = true; }
+                    if (!alreadySelected && isLeftFoot) { algorithm = 11; 算法 = 11; alreadySelected = true; }
+                    if (!alreadySelected && isRightFoot) { algorithm = 12; 算法 = 12; alreadySelected = true; }
                 }
 
                 if (Cheat::Aimbot::IgnoreBot) {

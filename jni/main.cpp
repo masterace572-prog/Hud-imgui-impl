@@ -605,9 +605,9 @@ void initOffset()
 
 void *RunGame(void *) 
 {
-    // Init ShadowHook in UNIQUE mode
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
-    LOGI("ShadowHook init done");
+    // Init ShadowHook in SHARED mode to allow hooking same addr from different libs
+    int initRet = shadowhook_init(SHADOWHOOK_MODE_SHARED, true);
+    LOGI("ShadowHook init done ret=%d errno=%d (%s)", initRet, shadowhook_get_errno(), shadowhook_to_errmsg(shadowhook_get_errno()));
 
     Cheat::libUE4Base = Tools::GetBaseAddress("libUE4.so");
 

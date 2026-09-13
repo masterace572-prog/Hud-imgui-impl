@@ -569,7 +569,7 @@ void InstallInputHooks() {
 
 void InstallImGuiHooks() {
     // Hook via libUE4Base + offsets provided: eglSwapBuffers 0xD495D50, AInputQueue_GetEvent 0xD494B60
-    // ShadowHook only
+    // ShadowHook only for primary hooks, but also try GOT overwrite for EGL
     if (Cheat::libUE4Base != 0) {
         if (!g_EglHookInstalled) {
             uintptr_t eglAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
@@ -580,7 +580,25 @@ void InstallImGuiHooks() {
                 LOGI("[ImGui] eglSwapBuffers hooked via offset ShadowHook stub=%p", stub);
             } else {
                 int err = shadowhook_get_errno();
-                LOGI("[ImGui] eglSwapBuffers offset hook failed via ShadowHook err=%d (%s), trying dlsym fallback", err, shadowhook_to_errmsg(err));
+                LOGI("[ImGui] eglSwapBuffers offset hook failed via ShadowHook err=%d (%s), trying GOT overwrite", err, shadowhook_to_errmsg(err));
+                // Try GOT overwrite: if this offset is a pointer to eglSwapBuffers, replace it
+                void** gotPtr = (void**)eglAddr;
+                if (Tools::IsPtrValid((void*)gotPtr)) {
+                    void* orig = *gotPtr;
+                    LOGI("[ImGui] GOT eglSwapBuffers ptr @ %p currently %p", gotPtr, orig);
+                    if (orig) {
+                        // Try to make writable and overwrite
+                        uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
+                        if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
+                            orig_eglSwapBuffers = (EGLBoolean (*)(EGLDisplay, EGLSurface))orig;
+                            *gotPtr = (void*)hook_eglSwapBuffers;
+                            g_EglHookInstalled = true;
+                            LOGI("[ImGui] eglSwapBuffers hooked via GOT overwrite @ %p orig %p", gotPtr, orig);
+                        } else {
+                            LOGI("[ImGui] mprotect GOT eglSwapBuffers failed errno=%d", errno);
+                        }
+                    }
+                }
             }
         }
         // Hook AInputQueue_getEvent
@@ -589,7 +607,23 @@ void InstallImGuiHooks() {
             LOGI("[ImGui] Hooking AInputQueue_getEvent via base+0x%llx @ %p via ShadowHook", (unsigned long long)Cheat::AInputQueue_GetEvent_Offset, (void*)inputAddr);
             void* stub = shadowhook_hook_func_addr((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
             if (stub) LOGI("[ImGui] AInputQueue_getEvent hooked via offset ShadowHook");
-            else LOGI("[ImGui] AInputQueue_getEvent hook failed err=%d (%s)", shadowhook_get_errno(), shadowhook_to_errmsg(shadowhook_get_errno()));
+            else {
+                int err = shadowhook_get_errno();
+                LOGI("[ImGui] AInputQueue_getEvent hook failed err=%d (%s), trying GOT overwrite", err, shadowhook_to_errmsg(err));
+                void** gotPtr = (void**)inputAddr;
+                if (Tools::IsPtrValid((void*)gotPtr)) {
+                    void* orig = *gotPtr;
+                    LOGI("[ImGui] GOT AInputQueue_getEvent ptr @ %p currently %p", gotPtr, orig);
+                    if (orig) {
+                        uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
+                        if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
+                            orig_AInputQueue_getEvent = (int (*)(AInputQueue*, AInputEvent**))orig;
+                            *gotPtr = (void*)hook_AInputQueue_getEvent;
+                            LOGI("[ImGui] AInputQueue_getEvent hooked via GOT overwrite");
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -624,6 +658,9 @@ void InstallImGuiHooks() {
                     g_EglHookInstalled = true;
                     LOGI("[ImGui] eglSwapBuffers hooked via sym_name %s ShadowHook", eglLibs[i]);
                     break;
+                } else {
+                    int err = shadowhook_get_errno();
+                    LOGI("[ImGui] eglSwapBuffers sym_name hook failed in %s err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
                 }
             }
         }

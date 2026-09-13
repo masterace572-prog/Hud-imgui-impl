@@ -577,34 +577,58 @@ void InstallImGuiHooks() {
             void* stub = shadowhook_hook_func_addr((void*)eglAddr, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
             if (stub) {
                 g_EglHookInstalled = true;
-                LOGI("[ImGui] eglSwapBuffers hooked via offset ShadowHook");
+                LOGI("[ImGui] eglSwapBuffers hooked via offset ShadowHook stub=%p", stub);
             } else {
-                LOGI("[ImGui] eglSwapBuffers offset hook failed via ShadowHook err=%d, trying dlsym fallback", shadowhook_get_errno());
+                int err = shadowhook_get_errno();
+                LOGI("[ImGui] eglSwapBuffers offset hook failed via ShadowHook err=%d (%s), trying dlsym fallback", err, shadowhook_to_errmsg(err));
             }
         }
         // Hook AInputQueue_getEvent
         uintptr_t inputAddr = Cheat::libUE4Base + Cheat::AInputQueue_GetEvent_Offset;
         if (!orig_AInputQueue_getEvent) {
             LOGI("[ImGui] Hooking AInputQueue_getEvent via base+0x%llx @ %p via ShadowHook", (unsigned long long)Cheat::AInputQueue_GetEvent_Offset, (void*)inputAddr);
-            shadowhook_hook_func_addr((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
+            void* stub = shadowhook_hook_func_addr((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
+            if (stub) LOGI("[ImGui] AInputQueue_getEvent hooked via offset ShadowHook");
+            else LOGI("[ImGui] AInputQueue_getEvent hook failed err=%d (%s)", shadowhook_get_errno(), shadowhook_to_errmsg(shadowhook_get_errno()));
         }
     }
 
     // Fallback to dlsym if offset hook not done - also via ShadowHook
     if (!g_EglHookInstalled) {
-        void* libEGL = dlopen("libEGL.so", RTLD_NOW);
-        if (!libEGL) libEGL = dlopen("libGLESv2.so", RTLD_NOW);
-        if (libEGL) {
-            void* sym = dlsym(libEGL, "eglSwapBuffers");
-            if (sym && !orig_eglSwapBuffers) {
+        const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", "libGLESv3.so", "libUE4.so", nullptr };
+        for (int i = 0; eglLibs[i] != nullptr; ++i) {
+            void* lib = dlopen(eglLibs[i], RTLD_NOW);
+            if (!lib) {
+                LOGI("[ImGui] dlopen %s failed", eglLibs[i]);
+                continue;
+            }
+            void* sym = dlsym(lib, "eglSwapBuffers");
+            if (sym) {
+                LOGI("[ImGui] Found eglSwapBuffers in %s @ %p, trying hook via ShadowHook", eglLibs[i], sym);
                 void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
                 if (stub) {
                     g_EglHookInstalled = true;
-                    LOGI("[ImGui] eglSwapBuffers hooked via dlsym %p ShadowHook", sym);
+                    LOGI("[ImGui] eglSwapBuffers hooked via dlsym %s %p ShadowHook stub=%p", eglLibs[i], sym, stub);
+                    break;
+                } else {
+                    int err = shadowhook_get_errno();
+                    LOGI("[ImGui] eglSwapBuffers dlsym hook failed in %s err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
+                }
+            } else {
+                LOGI("[ImGui] dlsym eglSwapBuffers not found in %s", eglLibs[i]);
+            }
+            // also try eglSwapBuffers with symbol name via shadowhook_hook_sym_name as last resort
+            if (!g_EglHookInstalled) {
+                void* stub = shadowhook_hook_sym_name(eglLibs[i], "eglSwapBuffers", (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+                if (stub) {
+                    g_EglHookInstalled = true;
+                    LOGI("[ImGui] eglSwapBuffers hooked via sym_name %s ShadowHook", eglLibs[i]);
+                    break;
                 }
             }
-        } else {
-            LOGI("[ImGui] dlopen libEGL failed");
+        }
+        if (!g_EglHookInstalled) {
+            LOGI("[ImGui] All eglSwapBuffers fallback hooks failed, ImGui will not render!");
         }
     }
 

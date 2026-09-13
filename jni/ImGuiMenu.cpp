@@ -175,15 +175,17 @@ int hook_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
 void DrawMenu() {
     static int drawCount = 0;
     drawCount++;
-    if (drawCount < 10 || drawCount % 100 == 0) {
+    if (drawCount < 10 || drawCount % 300 == 0) {
         LOGI("[ImGui] DrawMenu count %d tab=%d open=%d", drawCount, g_MenuTab, g_MenuOpen);
     }
 
-    // Test if ImGui background drawlist works at all
-    ImDrawList* bg = ImGui::GetBackgroundDrawList();
-    if (bg) {
-        bg->AddRectFilled(ImVec2(100, 100), ImVec2(400, 400), IM_COL32(255, 0, 0, 200));
-        bg->AddText(ImVec2(110, 110), IM_COL32(255, 255, 255, 255), "SANKE TEST");
+    // Red rect test only first 5 frames to verify rendering works (minimal)
+    if (drawCount <= 5) {
+        ImDrawList* bg = ImGui::GetBackgroundDrawList();
+        if (bg) {
+            bg->AddRectFilled(ImVec2(100, 100), ImVec2(400, 400), IM_COL32(255, 0, 0, 120));
+            bg->AddText(ImVec2(110, 110), IM_COL32(255, 255, 255, 255), "SANKE TEST");
+        }
     }
 
     if (!g_MenuOpen) {
@@ -206,18 +208,14 @@ void DrawMenu() {
     if (menuH < 400) menuH = 400;
     if (menuH > 900) menuH = 900;
 
-    // Force visible position for debugging
     ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Always);
     char titleBuf[128];
-    // Like example: FPS in title
     sprintf(titleBuf, "SANKE MENU ~ HUD ESP ~ %.1f FPS", io.Framerate);
-
-    ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiConfigFlags_NoMouseCursorChange;
+    ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar;
 
     if (ImGui::Begin(titleBuf, &g_MenuOpen, mainFlags)) {
-
-        // Left panel like your IMGUI example
+        // Left panel
         ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.6f);
         ImGui::PushStyleColor(ImGuiCol_Border, ImColor(100, 100, 100, 200).Value);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImColor(9, 36, 89, 0).Value);
@@ -226,7 +224,6 @@ void DrawMenu() {
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
 
-        // Buttons like example: Player ESP, Bullet Track, Extra Features
         if (ImGui::Button("Player ESP", ImVec2(150, 40))) g_MenuTab = 0;
         if (ImGui::Button("Aimbot", ImVec2(150, 40))) g_MenuTab = 1;
         if (ImGui::Button("Bullet Track", ImVec2(150, 40))) g_MenuTab = 2;
@@ -251,7 +248,7 @@ void DrawMenu() {
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
 
-        if (g_MenuTab == 0) { // Player ESP - toggles for DrawHUD
+        if (g_MenuTab == 0) {
             ImGui::Text("ESP - Uses DrawHUD (not ImGui drawlist)");
             ImGui::Separator();
             ImGui::Checkbox("Line", &Cheat::Esp::Line);
@@ -265,28 +262,21 @@ void DrawMenu() {
             ImGui::Checkbox("Vehicle Name", &Cheat::Esp::Vehicle::Name);
             ImGui::Checkbox("LootBox", &Cheat::Esp::LootBox);
             ImGui::Checkbox("Throwable (Nade)", &Cheat::Esp::Throwable);
-
             ImGui::Separator();
             ImGui::Text("FOV Circle (HUD)");
             ImGui::Checkbox("Show FOV Circle", &Cheat::FOV::ShowCircle);
             ImGui::ColorEdit4("Circle Color", (float*)&Cheat::FOV::CircleColor);
-        } else if (g_MenuTab == 1) { // Aimbot
+        } else if (g_MenuTab == 1) {
             ImGui::Text("Aimbot - Uses DrawMemory aim");
             ImGui::Separator();
             ImGui::Checkbox("Aimbot Enable", &Cheat::Aimbot::Enable);
-
             ImGui::Separator();
             ImGui::Text("Aim Mode");
             bool isFOV = Cheat::FOV::Enable;
             bool is180 = !Cheat::FOV::Enable;
-            if (ImGui::RadioButton("FOV", isFOV)) {
-                Cheat::FOV::Enable = true;
-            }
+            if (ImGui::RadioButton("FOV", isFOV)) Cheat::FOV::Enable = true;
             ImGui::SameLine();
-            if (ImGui::RadioButton("180°", is180)) {
-                Cheat::FOV::Enable = false;
-            }
-
+            if (ImGui::RadioButton("180°", is180)) Cheat::FOV::Enable = false;
             if (Cheat::FOV::Enable) {
                 if (ImGui::SliderFloat("FOV Radius", &Cheat::FOV::Radius, 50.0f, 1000.0f, "%.0f")) {
                     Cheat::Aimbot::Radius = Cheat::FOV::Radius;
@@ -295,11 +285,9 @@ void DrawMenu() {
                     Cheat::BulletTrack::Fov = Cheat::FOV::Radius;
                 }
             }
-
             ImGui::SliderFloat("Recoil", &Cheat::Aimbot::Recoil, 0.0f, 5.0f, "%.2f");
             ImGui::SliderFloat("RecoilSet", &Cheat::Aimbot::RecoilSet, 0.0f, 5.0f, "%.2f");
             ImGui::SliderFloat("Range", &Cheat::Aimbot::Range, 0.0f, 1000.0f, "%.0f");
-
             ImGui::Separator();
             ImGui::Text("Shared Target Checks");
             bool vis = Cheat::Aimbot::VisCheck;
@@ -317,28 +305,21 @@ void DrawMenu() {
                 Cheat::Aimbot::IgnoreBot = bot;
                 Cheat::BulletTrack::iGnoreBot = bot;
             }
-
             ImGui::Separator();
             ImGui::Text("FOV Circle");
             ImGui::Checkbox("Show Circle", &Cheat::FOV::ShowCircle);
             ImGui::ColorEdit4("Circle Color", (float*)&Cheat::FOV::CircleColor);
-        } else if (g_MenuTab == 2) { // Bullet Track
+        } else if (g_MenuTab == 2) {
             ImGui::Text("Bullet Track - Magic Bullet");
             ImGui::Separator();
             ImGui::Checkbox("Bullet Track", &Cheat::BulletTrack::Enable);
-
             ImGui::Separator();
             ImGui::Text("Aim Mode");
             bool isFOV = Cheat::FOV::Enable;
             bool is180 = !Cheat::FOV::Enable;
-            if (ImGui::RadioButton("FOV", isFOV)) {
-                Cheat::FOV::Enable = true;
-            }
+            if (ImGui::RadioButton("FOV", isFOV)) Cheat::FOV::Enable = true;
             ImGui::SameLine();
-            if (ImGui::RadioButton("180°", is180)) {
-                Cheat::FOV::Enable = false;
-            }
-
+            if (ImGui::RadioButton("180°", is180)) Cheat::FOV::Enable = false;
             if (Cheat::FOV::Enable) {
                 if (ImGui::SliderFloat("FOV Radius", &Cheat::FOV::Radius, 50.0f, 1000.0f, "%.0f")) {
                     Cheat::Aimbot::Radius = Cheat::FOV::Radius;
@@ -348,7 +329,6 @@ void DrawMenu() {
                 }
             }
             ImGui::SliderFloat("Range", &Cheat::BulletTrack::Range, 0.0f, 600.0f, "%.0f");
-
             ImGui::Separator();
             ImGui::Text("Hit Target (Head / Body)");
             int hitTarget = Cheat::BulletTrack::HitTarget;
@@ -361,7 +341,6 @@ void DrawMenu() {
                 Cheat::BulletTrack::HitTarget = 1;
                 Cheat::BulletTrack::HitWhere = true;
             }
-
             ImGui::Separator();
             ImGui::Text("Adjust Accuracy - 3 Modes");
             int acc = Cheat::BulletTrack::AccuracyMode;
@@ -380,7 +359,6 @@ void DrawMenu() {
                 Cheat::BulletTrack::HitChance = true;
                 Cheat::BulletTrack::SBullet = true;
             }
-
             ImGui::Separator();
             ImGui::Text("Shared Target Checks");
             bool vis = Cheat::BulletTrack::VisCheck;
@@ -398,21 +376,20 @@ void DrawMenu() {
                 Cheat::BulletTrack::iGnoreBot = bot;
                 Cheat::Aimbot::IgnoreBot = bot;
             }
-
             ImGui::Separator();
             ImGui::Text("FOV Circle");
             ImGui::Checkbox("Show Circle", &Cheat::FOV::ShowCircle);
             ImGui::ColorEdit4("Circle Color", (float*)&Cheat::FOV::CircleColor);
-        } else if (g_MenuTab == 3) { // Memory
-            ImGui::Text("Memory Features");
+        } else if (g_MenuTab == 3) {
+            ImGui::Text("Memory Features - Wide/FPS removed");
             ImGui::Separator();
-            ImGui::Checkbox("Wide View", &Cheat::Memory::Wide);
+            // Wide removed per task - no Wide checkbox, no FPS blocks
             ImGui::Checkbox("Small Crosshair / No Recoil", &Cheat::Memory::Small);
             ImGui::Checkbox("Hit Effect", &Cheat::Memory::Hit);
             ImGui::Checkbox("Show Damage", &Cheat::Memory::ShowDamage);
-            ImGui::Checkbox("Skin Hack", &Cheat::Memory::Skin);
-        } else if (g_MenuTab == 4) { // Items
-            ImGui::Text("Item ESP - Toggles for DrawHUD item loop");
+            ImGui::Text("Wide/FPS functions removed as requested");
+        } else if (g_MenuTab == 4) {
+            ImGui::Text("Item ESP");
             ImGui::Separator();
             if (ImGui::Button("Enable All")) {
                 for (auto &p : Items) p.second = true;
@@ -439,17 +416,16 @@ void DrawMenu() {
                 }
             }
             ImGui::EndChild();
-        } else if (g_MenuTab == 5) { // Settings
+        } else if (g_MenuTab == 5) {
             ImGui::Text("Info");
             ImGui::Separator();
             ImGui::Text("Screen: %d x %d", glWidth, glHeight);
             ImGui::Text("Window: %d x %d", screenWidth, screenHeight);
             ImGui::Text("Density: %.0f", density);
             ImGui::Text("Menu: ImGui only, ESP via HUD");
-            ImGui::Separator();
-            ImGui::Text("Your example used ImGui drawlist for ESP");
-            ImGui::Text("This version keeps DrawHUD for ESP");
-            ImGui::Text("Menu toggles same bools");
+            ImGui::Text("Hooks: ShadowHook-only offsets");
+            ImGui::Text("ReceiveDrawHUD 0xafc6044, eglSwapBuffers 0xD495D50");
+            ImGui::Text("AInputQueue 0xD494B60, ShootBulletInner 0x6ff841c");
         }
 
         ImGui::EndChild();
@@ -462,40 +438,23 @@ void RenderImGui() {
     if (g_EglDisplay == EGL_NO_DISPLAY) return;
     if (glWidth <= 0 || glHeight <= 0) return;
 
-    // Debug log every 300 frames
     static int frameCount = 0;
     frameCount++;
-    if (frameCount < 10 || frameCount % 100 == 0) {
+    if (frameCount < 10 || frameCount % 300 == 0) {
         LOGI("[ImGui] RenderImGui frame %d g_MenuOpen=%d w=%d h=%d", frameCount, g_MenuOpen, glWidth, glHeight);
     }
 
-    // Ensure GL state is clean for ImGui
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_STENCIL_TEST);
-    glDisable(GL_CULL_FACE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+    // Minimal GL handling - don't force disable depth/stencil/cull before NewFrame as it breaks splash
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(glWidth, glHeight);
     ImGui::NewFrame();
 
-    // NOTE: We do NOT call DrawESP with ImGui drawlist here
-    // Your example did: DrawESP(ImGui::GetBackgroundDrawList());
-    // We keep HUD ESP: DrawHUD is called via ProcessEvent hook, not here
-    // Only menu:
     DrawMenu();
 
     ImGui::Render();
     ImGuiIO &io = ImGui::GetIO();
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-    // Check GL error
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR && frameCount % 100 == 0) {
-        LOGI("[ImGui] GL error after RenderDrawData: 0x%x", err);
-    }
 }
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
@@ -612,8 +571,8 @@ void InstallInputHooks() {
 }
 
 void InstallImGuiHooks() {
-    // Hook via libUE4Base + offsets provided: eglSwapBuffers 0xD495D50, AInputQueue_GetEvent 0xD494B60
-    // ShadowHook only for primary hooks, but also try GOT overwrite for EGL
+    // ShadowHook-only offsets: ReceiveDrawHUD 0xafc6044, eglSwapBuffers 0xD495D50, AInputQueue 0xD494B60, ShootBulletInner 0x6ff841c
+    // Only hook offset to avoid double hook causing splash hang (no libEGL dlsym double hook)
     if (Cheat::libUE4Base != 0) {
         if (!g_EglHookInstalled) {
             uintptr_t eglAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
@@ -624,36 +583,10 @@ void InstallImGuiHooks() {
                 LOGI("[ImGui] eglSwapBuffers hooked via offset ShadowHook stub=%p", stub);
             } else {
                 int err = shadowhook_get_errno();
-                LOGI("[ImGui] eglSwapBuffers offset ShadowHook failed err=%d (%s), trying Dobby", err, shadowhook_to_errmsg(err));
-                int dobbyRet = DobbyHook((void*)eglAddr, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-                if (dobbyRet == 0) {
-                    g_EglHookInstalled = true;
-                    LOGI("[ImGui] eglSwapBuffers hooked via offset Dobby");
-                } else {
-                    LOGI("[ImGui] eglSwapBuffers offset Dobby failed ret=%d, trying GOT overwrite", dobbyRet);
-                    // Try GOT overwrite: if this offset is a pointer to eglSwapBuffers, replace it
-                    void** gotPtr = (void**)eglAddr;
-                    if (Tools::IsPtrValid((void*)gotPtr)) {
-                        void* orig = *gotPtr;
-                        LOGI("[ImGui] GOT eglSwapBuffers ptr @ %p currently %p", gotPtr, orig);
-                        if (orig && Tools::IsPtrValid(orig)) {
-                            uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
-                            if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
-                                orig_eglSwapBuffers = (EGLBoolean (*)(EGLDisplay, EGLSurface))orig;
-                                *gotPtr = (void*)hook_eglSwapBuffers;
-                                g_EglHookInstalled = true;
-                                LOGI("[ImGui] eglSwapBuffers hooked via GOT overwrite @ %p orig %p", gotPtr, orig);
-                            } else {
-                                LOGI("[ImGui] mprotect GOT eglSwapBuffers failed errno=%d", errno);
-                            }
-                        } else {
-                            LOGI("[ImGui] GOT eglSwapBuffers orig invalid, not overwriting");
-                        }
-                    }
-                }
+                LOGI("[ImGui] eglSwapBuffers offset ShadowHook failed err=%d (%s)", err, shadowhook_to_errmsg(err));
             }
         }
-        // Hook AInputQueue_getEvent
+        // Hook AInputQueue_getEvent 0xD494B60
         uintptr_t inputAddr = Cheat::libUE4Base + Cheat::AInputQueue_GetEvent_Offset;
         if (!orig_AInputQueue_getEvent) {
             LOGI("[ImGui] Hooking AInputQueue_getEvent via base+0x%llx @ %p via ShadowHook", (unsigned long long)Cheat::AInputQueue_GetEvent_Offset, (void*)inputAddr);
@@ -661,105 +594,14 @@ void InstallImGuiHooks() {
             if (stub) LOGI("[ImGui] AInputQueue_getEvent hooked via offset ShadowHook");
             else {
                 int err = shadowhook_get_errno();
-                LOGI("[ImGui] AInputQueue_getEvent ShadowHook failed err=%d (%s), trying Dobby", err, shadowhook_to_errmsg(err));
-                int dobbyRet = DobbyHook((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
-                if (dobbyRet == 0) {
-                    LOGI("[ImGui] AInputQueue_getEvent hooked via Dobby");
-                } else {
-                    LOGI("[ImGui] AInputQueue_getEvent Dobby failed ret=%d, trying GOT", dobbyRet);
-                    void** gotPtr = (void**)inputAddr;
-                    if (Tools::IsPtrValid((void*)gotPtr)) {
-                        void* orig = *gotPtr;
-                        LOGI("[ImGui] GOT AInputQueue_getEvent ptr @ %p currently %p", gotPtr, orig);
-                        if (orig && Tools::IsPtrValid(orig)) {
-                            uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
-                            if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
-                                orig_AInputQueue_getEvent = (int (*)(AInputQueue*, AInputEvent**))orig;
-                                *gotPtr = (void*)hook_AInputQueue_getEvent;
-                                LOGI("[ImGui] AInputQueue_getEvent hooked via GOT overwrite");
-                            }
-                        }
-                    }
-                }
+                LOGI("[ImGui] AInputQueue_getEvent ShadowHook failed err=%d (%s)", err, shadowhook_to_errmsg(err));
             }
         }
     }
 
-    // Always try to hook real eglSwapBuffers in libEGL.so as well, because game may call it directly
-    // This ensures we catch per-frame swaps even if offset hook only catches wrapper init
-    // Try ShadowHook first, then Dobby as fallback as user requested
-    {
-        const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", "libGLESv3.so", nullptr };
-        for (int i = 0; eglLibs[i] != nullptr; ++i) {
-            void* lib = dlopen(eglLibs[i], RTLD_NOW);
-            if (!lib) continue;
-            void* sym = dlsym(lib, "eglSwapBuffers");
-            if (sym) {
-                // Check if already hooked (same as orig)
-                if (orig_eglSwapBuffers && sym == (void*)orig_eglSwapBuffers) {
-                    LOGI("[ImGui] eglSwapBuffers in %s already hooked (same addr %p)", eglLibs[i], sym);
-                    continue;
-                }
-                LOGI("[ImGui] Also hooking eglSwapBuffers in %s @ %p", eglLibs[i], sym);
-                void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-                if (stub) {
-                    LOGI("[ImGui] eglSwapBuffers hooked in %s via ShadowHook stub=%p", eglLibs[i], stub);
-                    g_EglHookInstalled = true;
-                } else {
-                    int err = shadowhook_get_errno();
-                    LOGI("[ImGui] eglSwapBuffers ShadowHook in %s failed err=%d (%s), trying Dobby", eglLibs[i], err, shadowhook_to_errmsg(err));
-                    int dobbyRet = DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-                    if (dobbyRet == 0) {
-                        LOGI("[ImGui] eglSwapBuffers hooked in %s via Dobby", eglLibs[i]);
-                        g_EglHookInstalled = true;
-                    } else {
-                        LOGI("[ImGui] eglSwapBuffers Dobby hook in %s failed ret=%d", eglLibs[i], dobbyRet);
-                    }
-                }
-            }
-        }
-    }
-
-    // Fallback to dlsym if offset hook not done - also via ShadowHook
+    // No fallback to libEGL - keep offset-only to prevent splash freeze from double hook
     if (!g_EglHookInstalled) {
-        const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", "libGLESv3.so", "libUE4.so", nullptr };
-        for (int i = 0; eglLibs[i] != nullptr; ++i) {
-            void* lib = dlopen(eglLibs[i], RTLD_NOW);
-            if (!lib) {
-                LOGI("[ImGui] dlopen %s failed", eglLibs[i]);
-                continue;
-            }
-            void* sym = dlsym(lib, "eglSwapBuffers");
-            if (sym) {
-                LOGI("[ImGui] Found eglSwapBuffers in %s @ %p, trying hook via ShadowHook", eglLibs[i], sym);
-                void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-                if (stub) {
-                    g_EglHookInstalled = true;
-                    LOGI("[ImGui] eglSwapBuffers hooked via dlsym %s %p ShadowHook stub=%p", eglLibs[i], sym, stub);
-                    break;
-                } else {
-                    int err = shadowhook_get_errno();
-                    LOGI("[ImGui] eglSwapBuffers dlsym hook failed in %s err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
-                }
-            } else {
-                LOGI("[ImGui] dlsym eglSwapBuffers not found in %s", eglLibs[i]);
-            }
-            // also try eglSwapBuffers with symbol name via shadowhook_hook_sym_name as last resort
-            if (!g_EglHookInstalled) {
-                void* stub = shadowhook_hook_sym_name(eglLibs[i], "eglSwapBuffers", (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
-                if (stub) {
-                    g_EglHookInstalled = true;
-                    LOGI("[ImGui] eglSwapBuffers hooked via sym_name %s ShadowHook", eglLibs[i]);
-                    break;
-                } else {
-                    int err = shadowhook_get_errno();
-                    LOGI("[ImGui] eglSwapBuffers sym_name hook failed in %s err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
-                }
-            }
-        }
-        if (!g_EglHookInstalled) {
-            LOGI("[ImGui] All eglSwapBuffers fallback hooks failed, ImGui will not render!");
-        }
+        LOGI("[ImGui] eglSwapBuffers offset hook not installed, ImGui will not render!");
     }
 
     InstallInputHooks();

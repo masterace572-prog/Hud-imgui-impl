@@ -32,12 +32,16 @@ extern bool g_MenuOpen;
 
 // Original function pointers
 extern EGLBoolean (*orig_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
+extern EGLBoolean (*orig_eglSwapBuffers_Real)(EGLDisplay dpy, EGLSurface surface);
+extern EGLBoolean (*orig_eglSwapBuffers_Offset)(EGLDisplay dpy, EGLSurface surface);
 extern __int64 (*orig_renderer)(__int64 *ConfigAttrib, int a2);
 extern int32_t (*orig_onInputEvent)(struct android_app* app, AInputEvent* event);
 extern int (*orig_AInputQueue_getEvent)(AInputQueue* queue, AInputEvent** outEvent);
 
 // Hook functions
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface);
+EGLBoolean hook_eglSwapBuffers_Real(EGLDisplay dpy, EGLSurface surface);
+EGLBoolean hook_eglSwapBuffers_Offset(EGLDisplay dpy, EGLSurface surface);
 __int64 hook_renderer(__int64 *ConfigAttrib, int a2);
 int32_t hook_onInputEvent(struct android_app* app, AInputEvent* event);
 int hook_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent);

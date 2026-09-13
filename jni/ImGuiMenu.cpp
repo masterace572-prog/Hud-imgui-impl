@@ -10,15 +10,21 @@ EGLContext g_EglContext = EGL_NO_CONTEXT;
 bool g_MenuOpen = true;
 
 EGLBoolean (*orig_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface) = nullptr;
+EGLBoolean (*orig_eglSwapBuffers_Real)(EGLDisplay dpy, EGLSurface surface) = nullptr;
+EGLBoolean (*orig_eglSwapBuffers_Offset)(EGLDisplay dpy, EGLSurface surface) = nullptr;
 __int64 (*orig_renderer)(__int64 *ConfigAttrib, int a2) = nullptr;
 int32_t (*orig_onInputEvent)(struct android_app* app, AInputEvent* event) = nullptr;
 int (*orig_AInputQueue_getEvent)(AInputQueue* queue, AInputEvent** outEvent) = nullptr;
 
 static bool g_InputHookInstalled = false;
 static bool g_EglHookInstalled = false;
+static bool g_EglRealHookInstalled = false;
 static int g_MenuTab = 0; // 0=ESP, 1=Aim, 2=Memory, 3=Items, 4=Settings
 
-// Style setup - similar to your IMGUI example but keeping HUD ESP
+// Reentrancy guard to avoid double RenderImGui when wrapper calls real eglSwapBuffers
+static thread_local bool g_InEglSwap = false;
+
+// Style setup
 static void SetupImGuiStyle() {
     ImGuiStyle &style = ImGui::GetStyle();
     ImGui::StyleColorsDark();
@@ -35,7 +41,7 @@ static void SetupImGuiStyle() {
 
     ImVec4* colors = style.Colors;
     colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.12f, 0.94f);
-    colors[ImGuiCol_ChildBg] = ImVec4(0.09f, 0.20f, 0.35f, 0.00f); // transparent like example
+    colors[ImGuiCol_ChildBg] = ImVec4(0.09f, 0.20f, 0.35f, 0.00f);
     colors[ImGuiCol_Border] = ImVec4(0.39f, 0.39f, 0.39f, 0.78f);
     colors[ImGuiCol_Header] = ImVec4(0.20f, 0.25f, 0.40f, 0.55f);
     colors[ImGuiCol_HeaderHovered] = ImVec4(0.26f, 0.35f, 0.55f, 0.80f);
@@ -48,7 +54,6 @@ static void SetupImGuiStyle() {
     colors[ImGuiCol_FrameBgHovered] = ImVec4(0.30f, 0.30f, 0.35f, 1.00f);
     colors[ImGuiCol_FrameBgActive] = ImVec4(0.25f, 0.35f, 0.55f, 1.00f);
 
-    // Scale based on density like your example does: density / 20, density / 14 etc
     float scale = 1.0f;
     if (density > 0) {
         scale = density / 160.0f;
@@ -89,7 +94,6 @@ bool InitImGui(EGLDisplay dpy, EGLSurface surface, ANativeWindow* window) {
 
     SetupImGuiStyle();
 
-    // Init backends - note example uses ImGui_ImplAndroid_Init() without window, but our backend needs window
     bool androidInit = ImGui_ImplAndroid_Init(window);
     LOGI("ImGui_ImplAndroid_Init ret=%d", androidInit);
     bool glInit300 = ImGui_ImplOpenGL3_Init("#version 300 es");
@@ -99,13 +103,6 @@ bool InitImGui(EGLDisplay dpy, EGLSurface surface, ANativeWindow* window) {
         bool glInit100 = ImGui_ImplOpenGL3_Init("#version 100");
         LOGI("ImGui_ImplOpenGL3_Init #100 ret=%d", glInit100);
     }
-
-    // Optional: load custom font like example does with PIRO_data
-    // io.Fonts->AddFontFromMemoryTTF((void*)PIRO_data, PIRO_size, 20.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-    // For now use default + density scaled size
-    ImFontConfig cfg;
-    cfg.SizePixels = density > 0 ? (density / 20.0f) : 20.0f;
-    // io.Fonts->AddFontDefault(&cfg); // default already added
 
     g_ImGuiInitialized = true;
 
@@ -131,7 +128,6 @@ void ShutdownImGui() {
     g_EglContext = EGL_NO_CONTEXT;
 }
 
-// Input hook - like your IMGUI example: passes screen_scale
 int32_t hook_onInputEvent(struct android_app* app, AInputEvent* event) {
     if (g_ImGuiInitialized && event) {
         float sx = 1.0f, sy = 1.0f;
@@ -150,28 +146,21 @@ int32_t hook_onInputEvent(struct android_app* app, AInputEvent* event) {
     return 0;
 }
 
-// Low-level input queue hook using your offset 0xD494B60 (AInputQueue_GetEvent)
-// Signature: int AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent)
 int hook_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
     int result = -1;
     if (orig_AInputQueue_getEvent) {
         result = orig_AInputQueue_getEvent(queue, outEvent);
     }
     if (result >= 0 && outEvent && *outEvent && g_ImGuiInitialized) {
-        // Forward to ImGui with scale like example
         float sx = 1.0f, sy = 1.0f;
         if (glWidth > 0 && screenWidth > 0) sx = (float)screenWidth / (float)glWidth;
         if (glHeight > 0 && screenHeight > 0) sy = (float)screenHeight / (float)glHeight;
         ImVec2 scale = ImVec2(sx, sy);
         ImGui_ImplAndroid_HandleInputEvent(*outEvent, scale);
-        // If menu open and ImGui wants capture, we could consume? 
-        // But AInputQueue_getEvent is expected to return event, so we don't block here
-        // Blocking is done in onInputEvent hook
     }
     return result;
 }
 
-// Menu only - no ESP draw via ImGui drawlist, ESP stays in DrawHUD
 void DrawMenu() {
     static int drawCount = 0;
     drawCount++;
@@ -179,12 +168,12 @@ void DrawMenu() {
         LOGI("[ImGui] DrawMenu count %d tab=%d open=%d", drawCount, g_MenuTab, g_MenuOpen);
     }
 
-    // Red rect test only first 5 frames to verify rendering works (minimal)
-    if (drawCount <= 5) {
+    // Red rect test first 10 frames to verify rendering works
+    if (drawCount <= 10) {
         ImDrawList* bg = ImGui::GetBackgroundDrawList();
         if (bg) {
-            bg->AddRectFilled(ImVec2(100, 100), ImVec2(400, 400), IM_COL32(255, 0, 0, 120));
-            bg->AddText(ImVec2(110, 110), IM_COL32(255, 255, 255, 255), "SANKE TEST");
+            bg->AddRectFilled(ImVec2(100, 100), ImVec2(600, 600), IM_COL32(255, 0, 0, 200));
+            bg->AddText(ImVec2(110, 110), IM_COL32(255, 255, 255, 255), "SANKE TEST - MENU SHOULD SHOW");
         }
     }
 
@@ -215,7 +204,6 @@ void DrawMenu() {
     ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar;
 
     if (ImGui::Begin(titleBuf, &g_MenuOpen, mainFlags)) {
-        // Left panel
         ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.6f);
         ImGui::PushStyleColor(ImGuiCol_Border, ImColor(100, 100, 100, 200).Value);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImColor(9, 36, 89, 0).Value);
@@ -239,7 +227,6 @@ void DrawMenu() {
         ImGui::EndChild();
         ImGui::SameLine();
 
-        // Right panel
         ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.6f);
         ImGui::PushStyleColor(ImGuiCol_Border, ImColor(100, 100, 100, 200).Value);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImColor(9, 36, 89, 0).Value);
@@ -383,7 +370,6 @@ void DrawMenu() {
         } else if (g_MenuTab == 3) {
             ImGui::Text("Memory Features - Wide/FPS removed");
             ImGui::Separator();
-            // Wide removed per task - no Wide checkbox, no FPS blocks
             ImGui::Checkbox("Small Crosshair / No Recoil", &Cheat::Memory::Small);
             ImGui::Checkbox("Hit Effect", &Cheat::Memory::Hit);
             ImGui::Checkbox("Show Damage", &Cheat::Memory::ShowDamage);
@@ -440,11 +426,14 @@ void RenderImGui() {
 
     static int frameCount = 0;
     frameCount++;
-    if (frameCount < 10 || frameCount % 300 == 0) {
+    if (frameCount < 20 || frameCount % 100 == 0) {
         LOGI("[ImGui] RenderImGui frame %d g_MenuOpen=%d w=%d h=%d", frameCount, g_MenuOpen, glWidth, glHeight);
     }
 
-    // Minimal GL handling - don't force disable depth/stencil/cull before NewFrame as it breaks splash
+    ImGuiIO &io = ImGui::GetIO();
+    // Update display size every frame - critical if rotation changes
+    io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(glWidth, glHeight);
     ImGui::NewFrame();
@@ -452,37 +441,33 @@ void RenderImGui() {
     DrawMenu();
 
     ImGui::Render();
-    ImGuiIO &io = ImGui::GetIO();
+    // Ensure viewport matches current display size
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    // Same as your example: query surface, get g_App window size, density
+// Core logic shared by both hooks - returns true if should call orig after
+static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface) {
     eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
     eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
 
-    if (glWidth <= 0 || glHeight <= 0) {
-        if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
-        return EGL_FALSE;
-    }
+    if (glWidth <= 0 || glHeight <= 0) return true;
+    if (!g_App) return true;
 
-    if (!g_App) {
-        if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
-        return EGL_FALSE;
-    }
-
-    // Ensure input hook installed (in case g_App was null earlier)
     if (!g_InputHookInstalled) InstallInputHooks();
 
-    screenWidth = ANativeWindow_getWidth(g_App->window);
-    screenHeight = ANativeWindow_getHeight(g_App->window);
-    density = AConfiguration_getDensity(g_App->config);
+    if (g_App->window) {
+        screenWidth = ANativeWindow_getWidth(g_App->window);
+        screenHeight = ANativeWindow_getHeight(g_App->window);
+    }
+    if (g_App->config) {
+        density = AConfiguration_getDensity(g_App->config);
+    }
 
     static int swapCount = 0;
     swapCount++;
-    if (swapCount < 10 || swapCount % 200 == 0) {
-        LOGI("[ImGui] eglSwapBuffers called count=%d dpy=%p surf=%p w=%d h=%d init=%d", swapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized);
+    if (swapCount < 20 || swapCount % 200 == 0) {
+        LOGI("[ImGui] eglSwapBuffers count=%d dpy=%p surf=%p w=%d h=%d init=%d inSwap=%d", swapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized, g_InEglSwap);
     }
 
     if (!g_ImGuiInitialized) {
@@ -490,22 +475,62 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         if (ctx != EGL_NO_CONTEXT && g_App->window) {
             InitImGui(dpy, surface, g_App->window);
         }
+        // Don't render on same frame as init - need next frame
+        return true;
     } else {
         if (dpy != g_EglDisplay || surface != g_EglSurface) {
             g_EglDisplay = dpy;
             g_EglSurface = surface;
             g_EglContext = eglGetCurrentContext();
         }
-        RenderImGui();
+        // Only render if not already inside swap (avoid double render when wrapper calls real)
+        if (!g_InEglSwap) {
+            RenderImGui();
+        } else {
+            if (swapCount % 200 == 0) {
+                LOGI("[ImGui] Skipping double RenderImGui due to reentrancy guard");
+            }
+        }
     }
-
-    if (orig_eglSwapBuffers) {
-        return orig_eglSwapBuffers(dpy, surface);
-    }
-    return EGL_FALSE;
+    return true;
 }
 
-// Your requested renderer hook - ConfigAttrib offsets 96,120,272
+EGLBoolean hook_eglSwapBuffers_Offset(EGLDisplay dpy, EGLSurface surface) {
+    if (g_InEglSwap) {
+        // Reentrant call - just call orig offset to avoid infinite loop
+        if (orig_eglSwapBuffers_Offset) return orig_eglSwapBuffers_Offset(dpy, surface);
+        if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
+        return EGL_FALSE;
+    }
+    g_InEglSwap = true;
+    CommonEglSwapPre(dpy, surface);
+    EGLBoolean res = EGL_FALSE;
+    if (orig_eglSwapBuffers_Offset) res = orig_eglSwapBuffers_Offset(dpy, surface);
+    else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
+    g_InEglSwap = false;
+    return res;
+}
+
+EGLBoolean hook_eglSwapBuffers_Real(EGLDisplay dpy, EGLSurface surface) {
+    if (g_InEglSwap) {
+        if (orig_eglSwapBuffers_Real) return orig_eglSwapBuffers_Real(dpy, surface);
+        if (orig_eglSwapBuffers) return orig_eglSwapBuffers(dpy, surface);
+        return EGL_FALSE;
+    }
+    g_InEglSwap = true;
+    CommonEglSwapPre(dpy, surface);
+    EGLBoolean res = EGL_FALSE;
+    if (orig_eglSwapBuffers_Real) res = orig_eglSwapBuffers_Real(dpy, surface);
+    else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
+    g_InEglSwap = false;
+    return res;
+}
+
+EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    // Generic fallback - calls offset version logic
+    return hook_eglSwapBuffers_Offset(dpy, surface);
+}
+
 __int64 hook_renderer(__int64 *ConfigAttrib, int a2) {
     if (!g_App || !g_App->window || !g_App->config) {
         if (orig_renderer) return orig_renderer(ConfigAttrib, a2);
@@ -555,7 +580,6 @@ __int64 hook_renderer(__int64 *ConfigAttrib, int a2) {
 void InstallRendererHook(uintptr_t rendererAddr) {
     if (rendererAddr == 0) return;
     if (orig_renderer != nullptr) return;
-    // ShadowHook only
     void* stub = shadowhook_hook_func_addr((void*)rendererAddr, (void*)hook_renderer, (void**)&orig_renderer);
     if (stub) LOGI("Renderer hook installed at %p via ShadowHook", (void*)rendererAddr);
     else LOGI("Renderer hook failed at %p via ShadowHook err=%d", (void*)rendererAddr, shadowhook_get_errno());
@@ -571,22 +595,21 @@ void InstallInputHooks() {
 }
 
 void InstallImGuiHooks() {
-    // ShadowHook-only offsets: ReceiveDrawHUD 0xafc6044, eglSwapBuffers 0xD495D50, AInputQueue 0xD494B60, ShootBulletInner 0x6ff841c
-    // Only hook offset to avoid double hook causing splash hang (no libEGL dlsym double hook)
+    // Hook libUE4 offset first - primary
     if (Cheat::libUE4Base != 0) {
         if (!g_EglHookInstalled) {
             uintptr_t eglAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
-            LOGI("[ImGui] Hooking eglSwapBuffers via base+0x%llx @ %p via ShadowHook", (unsigned long long)Cheat::eglSwapBuffers_Offset, (void*)eglAddr);
-            void* stub = shadowhook_hook_func_addr((void*)eglAddr, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+            LOGI("[ImGui] Hooking eglSwapBuffers via base+0x%llx @ %p via ShadowHook (offset)", (unsigned long long)Cheat::eglSwapBuffers_Offset, (void*)eglAddr);
+            void* stub = shadowhook_hook_func_addr((void*)eglAddr, (void*)hook_eglSwapBuffers_Offset, (void**)&orig_eglSwapBuffers_Offset);
             if (stub) {
                 g_EglHookInstalled = true;
-                LOGI("[ImGui] eglSwapBuffers hooked via offset ShadowHook stub=%p", stub);
+                orig_eglSwapBuffers = orig_eglSwapBuffers_Offset; // keep generic pointer in sync
+                LOGI("[ImGui] eglSwapBuffers offset hooked ShadowHook stub=%p orig=%p", stub, orig_eglSwapBuffers_Offset);
             } else {
                 int err = shadowhook_get_errno();
                 LOGI("[ImGui] eglSwapBuffers offset ShadowHook failed err=%d (%s)", err, shadowhook_to_errmsg(err));
             }
         }
-        // Hook AInputQueue_getEvent 0xD494B60
         uintptr_t inputAddr = Cheat::libUE4Base + Cheat::AInputQueue_GetEvent_Offset;
         if (!orig_AInputQueue_getEvent) {
             LOGI("[ImGui] Hooking AInputQueue_getEvent via base+0x%llx @ %p via ShadowHook", (unsigned long long)Cheat::AInputQueue_GetEvent_Offset, (void*)inputAddr);
@@ -599,9 +622,45 @@ void InstallImGuiHooks() {
         }
     }
 
-    // No fallback to libEGL - keep offset-only to prevent splash freeze from double hook
+    // Hook real eglSwapBuffers in libEGL.so as well - critical for per-frame rendering
+    // Use separate hook with reentrancy guard to avoid double render when wrapper calls real
+    if (!g_EglRealHookInstalled) {
+        const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", nullptr };
+        for (int i = 0; eglLibs[i] != nullptr; ++i) {
+            void* lib = dlopen(eglLibs[i], RTLD_NOW);
+            if (!lib) continue;
+            void* sym = dlsym(lib, "eglSwapBuffers");
+            if (!sym) continue;
+            // Avoid hooking same address as offset hook
+            if (Cheat::libUE4Base != 0) {
+                uintptr_t offsetAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
+                if (sym == (void*)offsetAddr) {
+                    LOGI("[ImGui] Skipping libEGL hook for %s - same as offset addr", eglLibs[i]);
+                    continue;
+                }
+            }
+            LOGI("[ImGui] Hooking real eglSwapBuffers in %s @ %p via ShadowHook", eglLibs[i], sym);
+            void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers_Real, (void**)&orig_eglSwapBuffers_Real);
+            if (stub) {
+                g_EglRealHookInstalled = true;
+                LOGI("[ImGui] real eglSwapBuffers hooked in %s via ShadowHook stub=%p orig=%p", eglLibs[i], stub, orig_eglSwapBuffers_Real);
+                // If offset hook not installed, use real as primary orig
+                if (!g_EglHookInstalled) {
+                    orig_eglSwapBuffers = orig_eglSwapBuffers_Real;
+                    g_EglHookInstalled = true;
+                }
+                break;
+            } else {
+                int err = shadowhook_get_errno();
+                LOGI("[ImGui] real eglSwapBuffers ShadowHook in %s failed err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
+            }
+        }
+    }
+
     if (!g_EglHookInstalled) {
-        LOGI("[ImGui] eglSwapBuffers offset hook not installed, ImGui will not render!");
+        LOGI("[ImGui] All eglSwapBuffers hooks failed, ImGui will not render!");
+    } else {
+        LOGI("[ImGui] eglSwapBuffers hook installed: offset=%d real=%d", g_EglHookInstalled, g_EglRealHookInstalled);
     }
 
     InstallInputHooks();

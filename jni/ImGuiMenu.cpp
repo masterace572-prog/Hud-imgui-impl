@@ -648,6 +648,33 @@ void InstallImGuiHooks() {
         }
     }
 
+    // Always try to hook real eglSwapBuffers in libEGL.so as well, because game may call it directly
+    // This ensures we catch per-frame swaps even if offset hook only catches wrapper init
+    {
+        const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", "libGLESv3.so", nullptr };
+        for (int i = 0; eglLibs[i] != nullptr; ++i) {
+            void* lib = dlopen(eglLibs[i], RTLD_NOW);
+            if (!lib) continue;
+            void* sym = dlsym(lib, "eglSwapBuffers");
+            if (sym) {
+                // Check if already hooked (same as orig)
+                if (orig_eglSwapBuffers && sym == (void*)orig_eglSwapBuffers) {
+                    LOGI("[ImGui] eglSwapBuffers in %s already hooked (same addr %p)", eglLibs[i], sym);
+                    continue;
+                }
+                LOGI("[ImGui] Also hooking eglSwapBuffers in %s @ %p", eglLibs[i], sym);
+                void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+                if (stub) {
+                    LOGI("[ImGui] eglSwapBuffers hooked in %s via dlsym stub=%p", eglLibs[i], stub);
+                    g_EglHookInstalled = true;
+                } else {
+                    int err = shadowhook_get_errno();
+                    LOGI("[ImGui] eglSwapBuffers hook in %s failed err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
+                }
+            }
+        }
+    }
+
     // Fallback to dlsym if offset hook not done - also via ShadowHook
     if (!g_EglHookInstalled) {
         const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", "libGLESv3.so", "libUE4.so", nullptr };

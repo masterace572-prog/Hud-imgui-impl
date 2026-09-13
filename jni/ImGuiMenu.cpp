@@ -426,13 +426,15 @@ void RenderImGui() {
 
     static int frameCount = 0;
     frameCount++;
-    if (frameCount < 20 || frameCount % 100 == 0) {
-        LOGI("[ImGui] RenderImGui frame %d g_MenuOpen=%d w=%d h=%d", frameCount, g_MenuOpen, glWidth, glHeight);
+    if (frameCount < 20 || frameCount % 50 == 0) {
+        LOGI("[ImGui] RenderImGui frame %d g_MenuOpen=%d w=%d h=%d dpy=%p surf=%p", frameCount, g_MenuOpen, glWidth, glHeight, g_EglDisplay, g_EglSurface);
     }
 
     ImGuiIO &io = ImGui::GetIO();
-    // Update display size every frame - critical if rotation changes
     io.DisplaySize = ImVec2((float)glWidth, (float)glHeight);
+
+    // Backup GL errors
+    while (glGetError() != GL_NO_ERROR) {}
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(glWidth, glHeight);
@@ -441,9 +443,18 @@ void RenderImGui() {
     DrawMenu();
 
     ImGui::Render();
-    // Ensure viewport matches current display size
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    // Try to ensure blend enabled for ImGui
+    GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
+    if (!blendWasEnabled) glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    if (!blendWasEnabled) glDisable(GL_BLEND);
+
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        LOGI("[ImGui] GL error after RenderDrawData: 0x%x frame=%d", err, frameCount);
+    }
 }
 
 // Core logic shared by both hooks - returns true if should call orig after

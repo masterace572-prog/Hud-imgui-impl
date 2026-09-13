@@ -387,7 +387,6 @@ void DrawMemory()
                 }
 
                 // If using algorithm from GetTargetForAimBot (bone visibility), override
-                // This matches your provided switch logic
                 switch (algorithm) {
                     case 1: targetAimPos = Target->GetBonePos("Head", {}); break;
                     case 2: targetAimPos = Target->GetBonePos("pelvis", {}); break;
@@ -446,7 +445,7 @@ void DrawMemory()
                                 if (ShootWeaponComponent) {
                                     UShootWeaponEntity *ShootWeaponEntityComponent = ShootWeaponComponent->ShootWeaponEntityComponent;
                                     if (ShootWeaponEntityComponent) {
-                                        // Bullet fire speed at 0x560 as per your note
+                                        // Bullet fire speed at 0x560
                                         float BulletFireSpeed = *(float*)((uintptr_t)ShootWeaponEntityComponent + 0x560);
                                         if (BulletFireSpeed <= 0) BulletFireSpeed = ShootWeaponEntityComponent->BulletFireSpeed;
 
@@ -491,64 +490,9 @@ void DrawMemory()
         }
     }
 
-    // Memory features (Wide, Hit, Small)
-    static USTExtraGameInstance* Instance = nullptr;
-    if (!Instance)
-    {
-        Instance = UObject::FindObject<USTExtraGameInstance>("STExtraGameInstance Transient.UAEGameEngine_1.STExtraGameInstance_1");
-        if (Instance != nullptr)
-        {
-            auto& UserSettings = Instance->UserDetailSetting;
-            UserSettings.PUBGDeviceFPSDef = 120;
-            UserSettings.PUBGDeviceFPSLow = 120;
-            UserSettings.PUBGDeviceFPSMid = 120;
-            UserSettings.PUBGDeviceFPSHigh = 120;
-            UserSettings.PUBGDeviceFPSHDR = 120;
-            UserSettings.PUBGDeviceFPSUltralHigh = 120;
-            UserSettings.DeviceMaxQualityLevel = 3;
-        }
-    }
-
-    static ULocalPlayer *UlocalPlayer = nullptr;
-    if (!UlocalPlayer)
-    {
-        UlocalPlayer = UObject::FindObject<ULocalPlayer>("LocalPlayer Transient.UAEGameEngine_1.LocalPlayer_1");
-    }
-
-    if (UlocalPlayer == nullptr)
-        return;
-
-    static auto OrigView = UlocalPlayer->AspectRatioAxisConstraint;
-    if (Cheat::Memory::Wide)
-    {
-        UlocalPlayer->AspectRatioAxisConstraint = EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV;
-    }
-    else
-    {
-        if (UlocalPlayer->AspectRatioAxisConstraint != OrigView)
-        {
-            UlocalPlayer->AspectRatioAxisConstraint = OrigView;
-        }
-    }
-    
     if (Cheat::Memory::Hit)
     {
         TriggerHitEffect();
-    }
-
-    if (Cheat::Memory::Wide)
-    {
-        uintptr_t localPlayer = (uintptr_t)Cheat::localPlayer;
-
-        if (localPlayer)
-        {
-            uintptr_t cameraComponent = *(uintptr_t*)(localPlayer + 0x1C08);
-
-            if (cameraComponent)
-            {
-                *(float*)(cameraComponent + 0x33C) = 140.0f;
-            }
-        }
     }
 
     if (Cheat::Memory::Small)

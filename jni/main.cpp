@@ -605,15 +605,29 @@ void initOffset()
 
 void *RunGame(void *) 
 {
-    // Init ShadowHook in SHARED mode to allow hooking same addr from different libs
-    int initRet = shadowhook_init(SHADOWHOOK_MODE_SHARED, true);
-    LOGI("ShadowHook init done ret=%d errno=%d (%s)", initRet, shadowhook_get_errno(), shadowhook_to_errmsg(shadowhook_get_errno()));
-
+    // Wait for libUE4 first
     Cheat::libUE4Base = Tools::GetBaseAddress("libUE4.so");
-
     while (!Cheat::libUE4Base) 
     {
         Cheat::libUE4Base = Tools::GetBaseAddress("libUE4.so");
+        sleep(1);
+    }
+
+    // Init ShadowHook in SHARED mode with retry - sometimes init fails with err 8
+    int initRet = -1;
+    for (int attempt = 0; attempt < 5; ++attempt) {
+        initRet = shadowhook_init(SHADOWHOOK_MODE_SHARED, true);
+        int err = shadowhook_get_errno();
+        LOGI("ShadowHook init attempt %d ret=%d errno=%d (%s)", attempt, initRet, err, shadowhook_to_errmsg(err));
+        if (initRet == 0 && err == 0) break;
+        // If fails with 8 (SIGSEGV handler), try UNIQUE mode as fallback
+        if (err == 8) {
+            LOGI("ShadowHook init err 8, trying UNIQUE mode");
+            initRet = shadowhook_init(SHADOWHOOK_MODE_UNIQUE, true);
+            err = shadowhook_get_errno();
+            LOGI("ShadowHook UNIQUE attempt ret=%d errno=%d (%s)", initRet, err, shadowhook_to_errmsg(err));
+            if (initRet == 0 && err == 0) break;
+        }
         sleep(1);
     }
 

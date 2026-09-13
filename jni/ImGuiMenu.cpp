@@ -170,6 +170,12 @@ int hook_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
 
 // Menu only - no ESP draw via ImGui drawlist, ESP stays in DrawHUD
 void DrawMenu() {
+    static int drawCount = 0;
+    drawCount++;
+    if (drawCount % 300 == 0) {
+        LOGI("[ImGui] DrawMenu count %d tab=%d open=%d", drawCount, g_MenuTab, g_MenuOpen);
+    }
+
     if (!g_MenuOpen) {
         ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(120, 50), ImGuiCond_FirstUseEver);
@@ -443,6 +449,13 @@ void RenderImGui() {
     if (!g_ImGuiInitialized) return;
     if (g_EglDisplay == EGL_NO_DISPLAY) return;
     if (glWidth <= 0 || glHeight <= 0) return;
+
+    // Debug log every 300 frames
+    static int frameCount = 0;
+    frameCount++;
+    if (frameCount % 300 == 0) {
+        LOGI("[ImGui] RenderImGui frame %d g_MenuOpen=%d w=%d h=%d", frameCount, g_MenuOpen, glWidth, glHeight);
+    }
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(glWidth, glHeight);

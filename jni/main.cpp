@@ -15,6 +15,13 @@ std::map<int, bool> Items;
 
 void DrawHUD(AHUD* HUD)
 {
+    // Draw FOV circle via HUD (not ImGui) if enabled
+    if (HUD && Cheat::FOV::ShowCircle && Cheat::FOV::Enable && (Cheat::Aimbot::Enable || Cheat::BulletTrack::Enable)) {
+        if (glWidth > 0 && glHeight > 0) {
+            DrawCircleHelper(HUD, (float)glWidth / 2.0f, (float)glHeight / 2.0f, Cheat::FOV::Radius, Cheat::FOV::CircleColor, 64, 1.5f);
+        }
+    }
+
     if (Cheat::localPlayer && Cheat::localController)
     {
         int totalEnemies = 0;
@@ -593,6 +600,19 @@ void AutoEspOn()
     Cheat::Memory::Small = true;
     Cheat::BulletTrack::Enable = true;
     Cheat::BulletTrack::Range = 600.0f;
+
+    Cheat::FOV::Enable = true;
+    Cheat::FOV::Radius = 250.0f;
+    Cheat::FOV::ShowCircle = true;
+    Cheat::FOV::CircleColor = FLinearColor(0.0f, 0.5f, 1.0f, 1.0f);
+    
+    // Sync aimbot and bullet track shared checks
+    Cheat::Aimbot::VisCheck = true;
+    Cheat::Aimbot::IgnoreKnock = true;
+    Cheat::Aimbot::IgnoreBot = false;
+    Cheat::BulletTrack::VisCheck = Cheat::Aimbot::VisCheck;
+    Cheat::BulletTrack::IgnoreKnock = Cheat::Aimbot::IgnoreKnock;
+    Cheat::BulletTrack::iGnoreBot = Cheat::Aimbot::IgnoreBot;
     
     for (auto &i : items_data) 
     {

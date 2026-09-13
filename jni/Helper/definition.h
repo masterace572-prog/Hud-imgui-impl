@@ -91,6 +91,7 @@ namespace Cheat
 
         inline float Aimset = 0.0f;
         inline float Fov = 1000.0f;
+        inline float Radius = 250.0f;
         inline float Range = 600.0f;
 
         inline bool AutoFire = false;
@@ -111,6 +112,14 @@ namespace Cheat
         inline bool ShowDamage = false;
         
         inline float Size = 10000.0f;
+    }
+
+    namespace FOV
+    {
+        inline bool Enable = true; // true = FOV circle mode, false = 180° (no FOV check)
+        inline float Radius = 250.0f;
+        inline bool ShowCircle = true;
+        inline FLinearColor CircleColor = FLinearColor(0.0f, 0.5f, 1.0f, 1.0f); // blue default
     }
 }
 
@@ -635,18 +644,12 @@ inline void DrawFilledRectangle(AHUD *HUD, FVector2D Pos, float Width, float Hei
 }
 
 inline bool isInsideFOVs(int x, int y) {
-    // New logic: use Aimbot Radius if set, else BulletTrack Fov
-    if (Cheat::Aimbot::Enable) {
-        if (Cheat::Aimbot::Radius <= 0) return true;
-        int circle_x = glWidth / 2;
-        int circle_y = glHeight / 2;
-        int rad = (int)(Cheat::Aimbot::Radius * 0.5f);
-        return (x - circle_x) * (x - circle_x) + (y - circle_y) * (y - circle_y) <= rad * rad;
-    }
-    if (!Cheat::BulletTrack::Enable) return true;
+    // If FOV disabled => 180° mode => always true
+    if (!Cheat::FOV::Enable) return true;
+    if (Cheat::FOV::Radius <= 0) return true;
     int circle_x = glWidth / 2;
     int circle_y = glHeight / 2;
-    int rad = (int)(Cheat::BulletTrack::Fov * 400.0f);
+    int rad = (int)Cheat::FOV::Radius;
     return (x - circle_x) * (x - circle_x) + (y - circle_y) * (y - circle_y) <= rad * rad;
 }
 
@@ -843,6 +846,10 @@ inline auto GetTargetForAimBot()
                     FVector middlePoint = {HeadSc.X + (width / 2), HeadSc.Y + (height / 2), 0};
                     if ((middlePoint.X >= 0 && middlePoint.X <= glWidth) &&
                             (middlePoint.Y >= 0 && middlePoint.Y <= glHeight)) {
+                        // FOV check - only if FOV mode enabled
+                        if (!isInsideFOVs((int)middlePoint.X, (int)middlePoint.Y))
+                            continue;
+
                         FVector2D v2Middle = FVector2D((float)(glWidth / 2), (float)(glHeight / 2));
                         FVector2D v2Loc = FVector2D(middlePoint.X, middlePoint.Y);
 

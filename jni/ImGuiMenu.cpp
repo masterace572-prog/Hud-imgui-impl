@@ -247,22 +247,117 @@ void DrawMenu() {
             ImGui::Checkbox("Vehicle Name", &Cheat::Esp::Vehicle::Name);
             ImGui::Checkbox("LootBox", &Cheat::Esp::LootBox);
             ImGui::Checkbox("Throwable (Nade)", &Cheat::Esp::Throwable);
+
+            ImGui::Separator();
+            ImGui::Text("FOV Circle (HUD)");
+            ImGui::Checkbox("Show FOV Circle", &Cheat::FOV::ShowCircle);
+            ImGui::ColorEdit4("Circle Color", (float*)&Cheat::FOV::CircleColor);
         } else if (g_MenuTab == 1) { // Aimbot
             ImGui::Text("Aimbot - Uses DrawMemory aim");
             ImGui::Separator();
             ImGui::Checkbox("Aimbot Enable", &Cheat::Aimbot::Enable);
+
+            ImGui::Separator();
+            ImGui::Text("Aim Mode");
+            bool isFOV = Cheat::FOV::Enable;
+            bool is180 = !Cheat::FOV::Enable;
+            if (ImGui::RadioButton("FOV", isFOV)) {
+                Cheat::FOV::Enable = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("180°", is180)) {
+                Cheat::FOV::Enable = false;
+            }
+
+            if (Cheat::FOV::Enable) {
+                if (ImGui::SliderFloat("FOV Radius", &Cheat::FOV::Radius, 50.0f, 1000.0f, "%.0f")) {
+                    Cheat::Aimbot::Radius = Cheat::FOV::Radius;
+                    Cheat::Aimbot::Fov = Cheat::FOV::Radius;
+                    Cheat::BulletTrack::Radius = Cheat::FOV::Radius;
+                    Cheat::BulletTrack::Fov = Cheat::FOV::Radius;
+                }
+            }
+
             ImGui::SliderFloat("Recoil", &Cheat::Aimbot::Recoil, 0.0f, 5.0f, "%.2f");
-            ImGui::Checkbox("VisCheck", &Cheat::Aimbot::VisCheck);
-            ImGui::Checkbox("Ignore Knock", &Cheat::Aimbot::IgnoreKnock);
-        } else if (g_MenuTab == 2) { // Bullet Track - like your example
+            ImGui::SliderFloat("RecoilSet", &Cheat::Aimbot::RecoilSet, 0.0f, 5.0f, "%.2f");
+            ImGui::SliderFloat("Range", &Cheat::Aimbot::Range, 0.0f, 1000.0f, "%.0f");
+
+            ImGui::Separator();
+            ImGui::Text("Shared Target Checks");
+            bool vis = Cheat::Aimbot::VisCheck;
+            if (ImGui::Checkbox("VisCheck (Shared)", &vis)) {
+                Cheat::Aimbot::VisCheck = vis;
+                Cheat::BulletTrack::VisCheck = vis;
+            }
+            bool knock = Cheat::Aimbot::IgnoreKnock;
+            if (ImGui::Checkbox("Ignore Knock (Shared)", &knock)) {
+                Cheat::Aimbot::IgnoreKnock = knock;
+                Cheat::BulletTrack::IgnoreKnock = knock;
+            }
+            bool bot = Cheat::Aimbot::IgnoreBot;
+            if (ImGui::Checkbox("Ignore Bot (Shared)", &bot)) {
+                Cheat::Aimbot::IgnoreBot = bot;
+                Cheat::BulletTrack::iGnoreBot = bot;
+            }
+
+            ImGui::Separator();
+            ImGui::Text("FOV Circle");
+            ImGui::Checkbox("Show Circle", &Cheat::FOV::ShowCircle);
+            ImGui::ColorEdit4("Circle Color", (float*)&Cheat::FOV::CircleColor);
+        } else if (g_MenuTab == 2) { // Bullet Track
             ImGui::Text("Bullet Track - Magic Bullet");
             ImGui::Separator();
             ImGui::Checkbox("Bullet Track", &Cheat::BulletTrack::Enable);
-            ImGui::SliderFloat("Radius", &Cheat::BulletTrack::Fov, 0.0f, 1000.0f, "%.0f");
+
+            ImGui::Separator();
+            ImGui::Text("Aim Mode");
+            bool isFOV = Cheat::FOV::Enable;
+            bool is180 = !Cheat::FOV::Enable;
+            if (ImGui::RadioButton("FOV", isFOV)) {
+                Cheat::FOV::Enable = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("180°", is180)) {
+                Cheat::FOV::Enable = false;
+            }
+
+            if (Cheat::FOV::Enable) {
+                if (ImGui::SliderFloat("FOV Radius", &Cheat::FOV::Radius, 50.0f, 1000.0f, "%.0f")) {
+                    Cheat::Aimbot::Radius = Cheat::FOV::Radius;
+                    Cheat::Aimbot::Fov = Cheat::FOV::Radius;
+                    Cheat::BulletTrack::Radius = Cheat::FOV::Radius;
+                    Cheat::BulletTrack::Fov = Cheat::FOV::Radius;
+                }
+            }
             ImGui::SliderFloat("Range", &Cheat::BulletTrack::Range, 0.0f, 600.0f, "%.0f");
-            ImGui::Checkbox("Visibility Check", &Cheat::BulletTrack::VisCheck);
-            ImGui::Checkbox("Ignore Knocked", &Cheat::BulletTrack::IgnoreKnock);
-            ImGui::Checkbox("Ignore Bot", &Cheat::BulletTrack::iGnoreBot);
+
+            ImGui::Separator();
+            ImGui::Text("Shared Target Checks");
+            bool vis = Cheat::BulletTrack::VisCheck;
+            if (ImGui::Checkbox("Visibility Check (Shared)", &vis)) {
+                Cheat::BulletTrack::VisCheck = vis;
+                Cheat::Aimbot::VisCheck = vis;
+            }
+            bool knock = Cheat::BulletTrack::IgnoreKnock;
+            if (ImGui::Checkbox("Ignore Knocked (Shared)", &knock)) {
+                Cheat::BulletTrack::IgnoreKnock = knock;
+                Cheat::Aimbot::IgnoreKnock = knock;
+            }
+            bool bot = Cheat::BulletTrack::iGnoreBot;
+            if (ImGui::Checkbox("Ignore Bot (Shared)", &bot)) {
+                Cheat::BulletTrack::iGnoreBot = bot;
+                Cheat::Aimbot::IgnoreBot = bot;
+            }
+
+            ImGui::Separator();
+            ImGui::Checkbox("HitChance 3/3", &Cheat::BulletTrack::HitChance);
+            ImGui::Checkbox("Second Bullet", &Cheat::BulletTrack::SBullet);
+            ImGui::Checkbox("Hit Body (else Head)", &Cheat::BulletTrack::HitWhere);
+
+            ImGui::Separator();
+            ImGui::Text("FOV Circle");
+            ImGui::Checkbox("Show Circle", &Cheat::FOV::ShowCircle);
+            ImGui::ColorEdit4("Circle Color", (float*)&Cheat::FOV::CircleColor);
         } else if (g_MenuTab == 3) { // Memory
             ImGui::Text("Memory Features");
             ImGui::Separator();

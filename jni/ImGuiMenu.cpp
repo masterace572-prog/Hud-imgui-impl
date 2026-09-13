@@ -383,7 +383,8 @@ void RenderImGui() {
 }
 
 static int g_SwapCount = 0;
-static bool g_TestNoRender = true; // TEST: true = only log, no ImGui render, to check if hook itself causes hang
+static bool g_TestNoRender = true; // TEST: true = no ImGui render in eglSwapBuffers, render only in ReceiveDrawHUD to avoid hang
+static bool g_SkipEglHooks = true; // TEST: skip all eglSwapBuffers hooks to test if game progresses past splash without them
 static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig) {
     eglQuerySurface(dpy, surface, EGL_WIDTH, &glWidth);
     eglQuerySurface(dpy, surface, EGL_HEIGHT, &glHeight);
@@ -512,6 +513,23 @@ void InstallInputHooks() {
 }
 
 void InstallImGuiHooks() {
+    if (g_SkipEglHooks) {
+        LOGI("[ImGui] Skipping ALL eglSwapBuffers hooks for testing (g_SkipEglHooks=true), rendering via ReceiveDrawHUD only");
+        if (Cheat::libUE4Base != 0) {
+            uintptr_t inputAddr = Cheat::libUE4Base + Cheat::AInputQueue_GetEvent_Offset;
+            if (!orig_AInputQueue_getEvent) {
+                LOGI("[ImGui] Hooking AInputQueue_getEvent at %p", (void*)inputAddr);
+                void* stub = shadowhook_hook_func_addr((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
+                if (stub) LOGI("[ImGui] AInputQueue_getEvent hooked");
+                else {
+                    int dRet = DobbyHook((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
+                    if (dRet == 0) LOGI("[ImGui] AInputQueue_getEvent hooked via Dobby");
+                }
+            }
+        }
+        InstallInputHooks();
+        return;
+    }
     if (Cheat::libUE4Base != 0) {
         uintptr_t inputAddr = Cheat::libUE4Base + Cheat::AInputQueue_GetEvent_Offset;
         if (!orig_AInputQueue_getEvent) {

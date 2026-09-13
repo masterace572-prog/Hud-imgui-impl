@@ -586,6 +586,39 @@ void hkReceiveDrawHUD(AHUD* hud, int SizeX, int SizeY)
         RenderESPPRIVATE(hud, SizeX, SizeY);
         DrawHUD(hud);
         DrawMemory();
+        // Try to render ImGui menu here as alternative to eglSwapBuffers hook
+        // This avoids libEGL hook which causes hang after count=1
+        if (g_App && g_App->window) {
+            // Try to get current EGL state if not yet initialized
+            if (!g_ImGuiInitialized) {
+                EGLDisplay dpy = eglGetCurrentDisplay();
+                EGLSurface surf = eglGetCurrentSurface(EGL_DRAW);
+                if (dpy != EGL_NO_DISPLAY && surf != EGL_NO_SURFACE) {
+                    // Update globals
+                    eglQuerySurface(dpy, surf, EGL_WIDTH, &glWidth);
+                    eglQuerySurface(dpy, surf, EGL_HEIGHT, &glHeight);
+                    if (glWidth > 0 && glHeight > 0) {
+                        screenWidth = ANativeWindow_getWidth(g_App->window);
+                        screenHeight = ANativeWindow_getHeight(g_App->window);
+                        density = AConfiguration_getDensity(g_App->config);
+                        InitImGui(dpy, surf, g_App->window);
+                    }
+                }
+            } else {
+                // Update size and render
+                EGLDisplay dpy = eglGetCurrentDisplay();
+                EGLSurface surf = eglGetCurrentSurface(EGL_DRAW);
+                if (dpy != EGL_NO_DISPLAY && surf != EGL_NO_SURFACE) {
+                    eglQuerySurface(dpy, surf, EGL_WIDTH, &glWidth);
+                    eglQuerySurface(dpy, surf, EGL_HEIGHT, &glHeight);
+                    g_EglDisplay = dpy;
+                    g_EglSurface = surf;
+                    g_EglContext = eglGetCurrentContext();
+                    // Render ImGui menu via HUD hook - should be visible if EGL context valid
+                    RenderImGui();
+                }
+            }
+        }
     }
     if (orig_ReceiveDrawHUD) {
         orig_ReceiveDrawHUD(hud, SizeX, SizeY);

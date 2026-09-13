@@ -172,13 +172,20 @@ int hook_AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
 void DrawMenu() {
     static int drawCount = 0;
     drawCount++;
-    if (drawCount % 300 == 0) {
+    if (drawCount < 10 || drawCount % 100 == 0) {
         LOGI("[ImGui] DrawMenu count %d tab=%d open=%d", drawCount, g_MenuTab, g_MenuOpen);
     }
 
+    // Test if ImGui background drawlist works at all
+    ImDrawList* bg = ImGui::GetBackgroundDrawList();
+    if (bg) {
+        bg->AddRectFilled(ImVec2(100, 100), ImVec2(400, 400), IM_COL32(255, 0, 0, 200));
+        bg->AddText(ImVec2(110, 110), IM_COL32(255, 255, 255, 255), "SANKE TEST");
+    }
+
     if (!g_MenuOpen) {
-        ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(120, 50), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(120, 50), ImGuiCond_Always);
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar;
         ImGui::Begin("##ToggleMenu", nullptr, flags);
         if (ImGui::Button("Menu", ImVec2(100, 35))) {

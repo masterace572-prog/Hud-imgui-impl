@@ -77,6 +77,7 @@ namespace Cheat
         inline float Recoil = 1.0f;
         inline float Range = 500.0f;
         inline float Fov = 250.0f;
+        inline float Radius = 250.0f;
         inline float FireSpeed = 0.0f;
     }
 
@@ -633,86 +634,149 @@ inline void DrawFilledRectangle(AHUD *HUD, FVector2D Pos, float Width, float Hei
 }
 
 inline bool isInsideFOVs(int x, int y) {
-    if (!Cheat::BulletTrack::Enable)
-        return true;
-
+    // New logic: use Aimbot Radius if set, else BulletTrack Fov
+    if (Cheat::Aimbot::Enable) {
+        if (Cheat::Aimbot::Radius <= 0) return true;
+        int circle_x = glWidth / 2;
+        int circle_y = glHeight / 2;
+        int rad = (int)(Cheat::Aimbot::Radius * 0.5f);
+        return (x - circle_x) * (x - circle_x) + (y - circle_y) * (y - circle_y) <= rad * rad;
+    }
+    if (!Cheat::BulletTrack::Enable) return true;
     int circle_x = glWidth / 2;
     int circle_y = glHeight / 2;
-    int rad = Cheat::BulletTrack::Fov * 400.0f;
+    int rad = (int)(Cheat::BulletTrack::Fov * 400.0f);
     return (x - circle_x) * (x - circle_x) + (y - circle_y) * (y - circle_y) <= rad * rad;
 }
+
+// Globals for bone visibility - used by aimbot/bullettrack
+inline bool isHead = false;
+inline bool isPelvis = false;
+inline bool isNeck = false;
+inline bool isLeftHand = false;
+inline bool isRightHand = false;
+inline bool isLeftFoot = false;
+inline bool isRightFoot = false;
+inline bool isLeftCalf = false;
+inline bool isRightCalf = false;
+inline bool isLeftLowerArm = false;
+inline bool isRightLowerArm = false;
+inline bool isLeftThigh = false;
+inline bool isRightThigh = false;
+inline bool isLeftUpperArm = false;
+inline bool isRightUpperArm = false;
+inline int algorithm = 0;
 
 inline auto GetTargetForAimBot()
 {
     ASTExtraPlayerCharacter *result = nullptr;
     float max = std::numeric_limits<float>::infinity();
     auto Actors = GetActors();
-    if (Cheat::localPlayer)
-    {
-        for (int i = 0; i < Actors.size(); i++)
-        {
+    auto localPlayer = Cheat::localPlayer;
+    auto localController = Cheat::localController;
+
+    if (localPlayer) {
+        for (int i = 0; i < Actors.size(); i++) {
             auto Actor = Actors[i];
             if (isObjectInvalid(Actor))
                 continue;
 
-            if (Actor->IsA(ASTExtraPlayerCharacter::StaticClass()))
-            {
+            if (Actor->IsA(ASTExtraPlayerCharacter::StaticClass())) {
                 auto Player = (ASTExtraPlayerCharacter *)Actor;
 
-                float dist = Cheat::localPlayer->GetDistanceTo(Player) / 100.0f;
-                if (dist > 500.0f)
+                if (Player->PlayerKey == localPlayer->PlayerKey)
                     continue;
-
-                if (Player->PlayerKey == Cheat::localController->PlayerKey)
-                    continue;
-                if (Player->TeamID == Cheat::localController->TeamID)
+                if (Player->TeamID == localPlayer->TeamID)
                     continue;
                 if (Player->bDead)
                     continue;
 
-                if (Cheat::Aimbot::IgnoreKnock)
-                {
+                if (Cheat::Aimbot::IgnoreKnock) {
                     if (Player->Health == 0.0f)
                         continue;
                 }
 
-                if (Cheat::Aimbot::VisCheck)
-                {
-                    if (!Cheat::localController->LineOfSightTo(Cheat::localController->PlayerCameraManager, Player->GetBonePos("Head", {}), true))
+                // Bone-to-bone visibility check - if no bone visible, skip
+                if (Cheat::Aimbot::VisCheck) {
+                    if (!localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("Head", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("neck_01", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("upperarm_r", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("upperarm_l", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("lowerarm_r", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("lowerarm_l", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_03", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_02", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_01", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("pelvis", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_l", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_r", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("calf_l", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("calf_r", {0,0,0}), false))
+                        continue;
+
+                    // Detailed bone visibility for algorithm selection
+                    bool alreadySelected = false;
+                    algorithm = 0;
+
+                    isHead = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("Head", {0,0,0}), false);
+                    isPelvis = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("pelvis", {0,0,0}), false);
+                    isNeck = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("neck_01", {0,0,0}), false);
+                    isLeftHand = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("hand_l", {0,0,0}), false);
+                    isRightHand = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("hand_r", {0,0,0}), false);
+                    isLeftFoot = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("foot_l", {0,0,0}), false);
+                    isRightFoot = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("foot_r", {0,0,0}), false);
+                    isLeftCalf = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("calf_l", {0,0,0}), false);
+                    isRightCalf = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("calf_r", {0,0,0}), false);
+                    isLeftLowerArm = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("lowerarm_l", {0,0,0}), false);
+                    isRightLowerArm = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("lowerarm_r", {0,0,0}), false);
+                    isLeftThigh = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_l", {0,0,0}), false);
+                    isRightThigh = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_r", {0,0,0}), false);
+                    isLeftUpperArm = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("upperarm_l", {0,0,0}), false);
+                    isRightUpperArm = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("upperarm_r", {0,0,0}), false);
+
+                    if (!alreadySelected && isHead) { algorithm = 1; alreadySelected = true; }
+                    if (!alreadySelected && isPelvis) { algorithm = 2; alreadySelected = true; }
+                    if (!alreadySelected && isLeftCalf) { algorithm = 3; alreadySelected = true; }
+                    if (!alreadySelected && isRightCalf) { algorithm = 4; alreadySelected = true; }
+                    if (!alreadySelected && isLeftLowerArm) { algorithm = 5; alreadySelected = true; }
+                    if (!alreadySelected && isRightLowerArm) { algorithm = 6; alreadySelected = true; }
+                    if (!alreadySelected && isLeftUpperArm) { algorithm = 7; alreadySelected = true; }
+                    if (!alreadySelected && isRightUpperArm) { algorithm = 8; alreadySelected = true; }
+                    if (!alreadySelected && isLeftThigh) { algorithm = 9; alreadySelected = true; }
+                    if (!alreadySelected && isRightThigh) { algorithm = 10; alreadySelected = true; }
+                    if (!alreadySelected && isLeftFoot) { algorithm = 11; alreadySelected = true; }
+                    if (!alreadySelected && isRightFoot) { algorithm = 12; alreadySelected = true; }
+                }
+
+                if (Cheat::Aimbot::IgnoreBot) {
+                    if (Player->bEnsure || Player->bIsAI)
                         continue;
                 }
 
                 auto Root = Player->GetBonePos("Root", {});
                 auto Head = Player->GetBonePos("Head", {});
-
                 FVector2D RootSc, HeadSc;
-                if (W2S(Root, &RootSc) && W2S(Head, &HeadSc))
-                {
+                if (W2S(Root, &RootSc) && W2S(Head, &HeadSc)) {
                     float height = abs(HeadSc.Y - RootSc.Y);
                     float width = height * 0.20f;
 
                     FVector middlePoint = {HeadSc.X + (width / 2), HeadSc.Y + (height / 2), 0};
                     if ((middlePoint.X >= 0 && middlePoint.X <= glWidth) &&
-                        (middlePoint.Y >= 0 && middlePoint.Y <= glHeight))
-                    {
+                            (middlePoint.Y >= 0 && middlePoint.Y <= glHeight)) {
                         FVector2D v2Middle = FVector2D((float)(glWidth / 2), (float)(glHeight / 2));
                         FVector2D v2Loc = FVector2D(middlePoint.X, middlePoint.Y);
 
-                        if (isInsideFOVs((int)middlePoint.X, (int)middlePoint.Y))
-                        {
-                            float dist = FVector2D::Distance(v2Middle, v2Loc);
-
-                            if (dist < max)
-                            {
-                                max = dist;
-                                result = Player;
-                            }
+                        float dist = FVector2D::Distance(v2Middle, v2Loc);
+                        if (dist < max) {
+                            max = dist;
+                            result = Player;
                         }
                     }
                 }
             }
         }
     }
+
     return result;
 }
 
@@ -756,14 +820,18 @@ inline auto GetTargetByPussy()
                         continue;
                 }
 
-                if (Cheat::BulletTrack::VisCheck)
-                {
-                    if (!localController->LineOfSightTo(Player, {0, 0, 0}, true))
+                // Bone-to-bone visibility - whatever bone visible will be tracked, default body
+                if (Cheat::BulletTrack::VisCheck) {
+                    if (!localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("Head", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_02", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_01", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("pelvis", {0,0,0}), false) &&
+                        !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("neck_01", {0,0,0}), false))
                         continue;
                 }
 
                 if (Cheat::BulletTrack::iGnoreBot) {
-                    if (Player->bEnsure)
+                    if (Player->bEnsure || Player->bIsAI)
                         continue;
                 }
                 auto Root = Player->GetBonePos("Root", {});
@@ -796,11 +864,96 @@ inline auto GetTargetByPussy()
     return result;
 }
 
-// New cross-based target - for now same logic as Pussy, will be replaced per your next snippets
+// New cross-based target - bone visibility, default body
 inline auto GetTargetByCross()
 {
-    // Use same logic as GetTargetByPussy for now
-    return GetTargetByPussy();
+    ASTExtraPlayerCharacter *result = 0;
+    float max = std::numeric_limits<float>::infinity();
+    auto Actors = GetActors();
+
+    auto localPlayer = Cheat::localPlayer;
+    auto localController = Cheat::localController;
+
+    if (localPlayer) {
+        for (int i = 0; i < Actors.size(); i++) {
+            auto Actor = Actors[i];
+            if (isObjectInvalid(Actor))
+                continue;
+
+            if (Actor->IsA(ASTExtraPlayerCharacter::StaticClass())) {
+
+                auto Player = (ASTExtraPlayerCharacter *) Actor;
+                float distx = localPlayer->GetDistanceTo(Player) / 100.0f;
+
+                if (distx > Cheat::BulletTrack::Range)
+                    continue;
+
+                if (Player->PlayerKey == localPlayer->PlayerKey)
+                    continue;
+
+                if (Player->TeamID == localPlayer->TeamID)
+                    continue;
+
+                if (Player->bDead)
+                    continue;
+
+                if (Player->bHidden)
+                    continue;
+
+                if (Cheat::BulletTrack::IgnoreKnock) {
+                    if (Player->Health == 0.0f)
+                        continue;
+                }
+
+                // Bone-to-bone visibility - default body
+                if (Cheat::BulletTrack::VisCheck) {
+                    // Check head and body bones
+                    bool headVisible = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("Head", {0,0,0}), false);
+                    bool bodyVisible = localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_02", {0,0,0}), false) ||
+                                       localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("spine_01", {0,0,0}), false) ||
+                                       localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("pelvis", {0,0,0}), false);
+                    if (!headVisible && !bodyVisible) {
+                        // Check other bones as fallback
+                        if (!localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("neck_01", {0,0,0}), false) &&
+                            !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("upperarm_r", {0,0,0}), false) &&
+                            !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("upperarm_l", {0,0,0}), false) &&
+                            !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_l", {0,0,0}), false) &&
+                            !localController->LineOfSightTo(localController->PlayerCameraManager, Player->GetBonePos("thigh_r", {0,0,0}), false))
+                            continue;
+                    }
+                }
+
+                if (Cheat::BulletTrack::iGnoreBot) {
+                    if (Player->bEnsure || Player->bIsAI)
+                        continue;
+                }
+                auto Root = Player->GetBonePos("Root", {});
+                auto Head = Player->GetBonePos("Head", {});
+                FVector2D RootSc, HeadSc;
+                if (W2S(Root, &RootSc) && W2S(Head, &HeadSc)) {
+                    float height = abs(HeadSc.Y - RootSc.Y);
+                    float width = height * 0.20f;
+
+                    FVector middlePoint = {HeadSc.X + (width / 2), HeadSc.Y + (height / 2), 0};
+                    if ((middlePoint.X >= 0 && middlePoint.X <= glWidth) &&
+                            (middlePoint.Y >= 0 && middlePoint.Y <= glHeight)) {
+                        FVector2D v2Middle = FVector2D((float)(glWidth / 2), (float)(glHeight / 2));
+                        FVector2D v2Loc = FVector2D(middlePoint.X, middlePoint.Y);
+
+                        if (isInsideFOVs((int)middlePoint.X, (int)middlePoint.Y)) 
+                        {
+                            float dist = FVector2D::Distance(v2Middle, v2Loc);
+                            if (dist < max) {
+                                max = dist;
+                                result = Player;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return result;
 }
 
 // --- New BulletTrack ShootBulletInner hook at 0x6ff841c ---

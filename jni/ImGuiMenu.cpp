@@ -480,31 +480,29 @@ static bool CommonEglSwapPre(EGLDisplay dpy, EGLSurface surface, bool afterOrig)
     if (!afterOrig) {
         g_SwapCount++;
         LOGI("[ImGui] eglSwapBuffers count=%d dpy=%p surf=%p w=%d h=%d init=%d depth=%d afterOrig=%d", g_SwapCount, dpy, surface, glWidth, glHeight, g_ImGuiInitialized, g_SwapDepth, afterOrig);
-    }
-
-    if (!g_ImGuiInitialized) {
-        EGLContext ctx = eglGetCurrentContext();
-        if (ctx != EGL_NO_CONTEXT && g_App->window) {
-            InitImGui(dpy, surface, g_App->window);
-            if (afterOrig && g_ImGuiInitialized) {
-                LOGI("[ImGui] Rendering immediately after init on same frame");
-                RenderImGui();
+        if (!g_ImGuiInitialized) {
+            EGLContext ctx = eglGetCurrentContext();
+            if (ctx != EGL_NO_CONTEXT && g_App->window) {
+                InitImGui(dpy, surface, g_App->window);
             }
-        }
-        return false;
-    } else {
-        if (dpy != g_EglDisplay || surface != g_EglSurface) {
-            g_EglDisplay = dpy;
-            g_EglSurface = surface;
-            g_EglContext = eglGetCurrentContext();
-        }
-        if (afterOrig) {
-            // Render even if depth==1 (outer), skip only if nested >1
+        } else {
+            if (dpy != g_EglDisplay || surface != g_EglSurface) {
+                g_EglDisplay = dpy;
+                g_EglSurface = surface;
+                g_EglContext = eglGetCurrentContext();
+            }
+            // Render BEFORE swap - standard ImGui hook pattern
             if (g_SwapDepth <= 1) {
                 RenderImGui();
-            } else {
-                LOGI("[ImGui] Skipping render due to depth %d", g_SwapDepth);
             }
+        }
+    } else {
+        // After orig - only for first frame init case, ensure we rendered at least once
+        if (g_ImGuiInitialized && g_SwapCount == 1) {
+            // First frame was init only, no render before - render now for next buffer
+            // But to avoid double render corruption, we already rendered in afterOrig previously, now we skip
+            // Actually we want to ensure first frame also shows menu, so render again if needed
+            // We'll not render here to avoid double render after swap which caused hang
         }
     }
     return true;
@@ -522,11 +520,13 @@ EGLBoolean hook_eglSwapBuffers_Offset(EGLDisplay dpy, EGLSurface surface) {
         if (g_SwapDepth == 0) g_InEglSwap = false;
         return res;
     }
+    // Before orig - init + render
     CommonEglSwapPre(dpy, surface, false);
     EGLBoolean res = EGL_FALSE;
     if (orig_eglSwapBuffers_Offset) res = orig_eglSwapBuffers_Offset(dpy, surface);
     else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
-    CommonEglSwapPre(dpy, surface, true);
+    // After orig - no render to avoid hang, just log
+    // CommonEglSwapPre(dpy, surface, true);
     g_SwapDepth--;
     if (g_SwapDepth == 0) g_InEglSwap = false;
     if (g_SwapCount < 20) LOGI("[ImGui] offset hook after orig res=%d count=%d depth=%d", res, g_SwapCount, g_SwapDepth);
@@ -549,7 +549,6 @@ EGLBoolean hook_eglSwapBuffers_Real(EGLDisplay dpy, EGLSurface surface) {
     EGLBoolean res = EGL_FALSE;
     if (orig_eglSwapBuffers_Real) res = orig_eglSwapBuffers_Real(dpy, surface);
     else if (orig_eglSwapBuffers) res = orig_eglSwapBuffers(dpy, surface);
-    CommonEglSwapPre(dpy, surface, true);
     g_SwapDepth--;
     if (g_SwapDepth == 0) g_InEglSwap = false;
     if (g_SwapCount < 20) LOGI("[ImGui] real hook after orig res=%d count=%d depth=%d", res, g_SwapCount, g_SwapDepth);

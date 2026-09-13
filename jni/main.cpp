@@ -619,8 +619,9 @@ void *RunGame(void *)
     
     initOffset();
 
-    // BulletTrack only - ShadowHook
-    shadowhook_hook_func_addr((void *)(Cheat::libUE4Base + 0x66B1FFC), (void *)shoot_event, (void **)&orig_shoot_event);
+    // New BulletTrack ShootBulletInner at 0x6ff841c via ShadowHook
+    shadowhook_hook_func_addr((void *)(Cheat::libUE4Base + Cheat::ShootBulletInner_Offset), (void *)xShootBulletInner, (void **)&ShootBulletInner);
+    LOGI("ShootBulletInner hooked at 0x%lx via ShadowHook", (unsigned long)Cheat::ShootBulletInner_Offset);
 
     // Install ImGui EGL hooks - menu only, ESP via ReceiveDrawHUD
     InstallImGuiHooks();

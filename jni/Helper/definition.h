@@ -29,6 +29,7 @@ namespace Cheat
     inline uintptr_t ReceiveDrawHUD_Offset = 0xafc6044;
     inline uintptr_t AInputQueue_GetEvent_Offset = 0xD494B60;
     inline uintptr_t eglSwapBuffers_Offset = 0xD495D50;
+    inline uintptr_t ShootBulletInner_Offset = 0x6ff841c;
 
     inline SDK::ASTExtraPlayerCharacter *localPlayer = nullptr;
     inline SDK::ASTExtraPlayerController *localController = nullptr;
@@ -91,6 +92,11 @@ namespace Cheat
         inline float Range = 600.0f;
 
         inline bool AutoFire = false;
+
+        // New fields for new ShootBulletInner logic
+        inline bool HitChance = false; // 3/3 mode
+        inline bool SBullet = false;   // second bullet track
+        inline bool HitWhere = false;  // false=Head, true=Body (spine_02)
     }
 
     namespace Memory 
@@ -790,22 +796,73 @@ inline auto GetTargetByPussy()
     return result;
 }
 
-inline void (*orig_shoot_event)(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot, void *unk1, int unk2, float a6, float a7, float a8) = 0;
-inline void shoot_event(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot, ASTExtraShootWeapon *weapon, int unk1, float a6, float a7, float a8)
+// New cross-based target - for now same logic as Pussy, will be replaced per your next snippets
+inline auto GetTargetByCross()
 {
-    if (Cheat::BulletTrack::Enable)
+    // Use same logic as GetTargetByPussy for now
+    return GetTargetByPussy();
+}
+
+// --- New BulletTrack ShootBulletInner hook at 0x6ff841c ---
+inline void (*ShootBulletInner)(uintptr_t Weapon, FVector StartLoc, FRotator StartRot, int ShootID) = nullptr;
+inline int BulletCounter = 0;
+
+inline void xShootBulletInner(uintptr_t Weapon, FVector StartLoc, FRotator StartRot, int ShootID)
+{
+    if (Cheat::BulletTrack::Enable) // Master switch
     {
-        ASTExtraPlayerCharacter *Target = GetTargetByPussy();
+        ASTExtraPlayerCharacter* Target = GetTargetByCross();
         if (Target)
         {
-            FVector targetAimPos = Target->GetHeadLocation(true);
+            // Determine if this bullet should track
+            bool shouldTrack = false;
+            if (Cheat::BulletTrack::HitChance) // If using 3/3 mode (all bullets track)
+            {
+                shouldTrack = true;
+            }
+            else // 1/3 or 2/3 mode
+            {
+                switch(BulletCounter % 3)
+                {
+                    case 0: shouldTrack = true; break; // First bullet always tracks
+                    case 1: shouldTrack = Cheat::BulletTrack::SBullet; break; // Second bullet tracks if SBullet is true
+                    case 2: shouldTrack = false; break; // Third bullet never tracks in this setup
+                }
+            }
             
-            FRotator sex = ToRotator(start, targetAimPos);
+            BulletCounter++;
+            if (BulletCounter >= 3) BulletCounter = 0;
 
-            return orig_shoot_event(thiz, targetAimPos, sex, weapon, unk1, a6, a7, a8);
+            if (shouldTrack)
+            {
+                FVector targetAimPos = Target->GetBonePos(
+                    Cheat::BulletTrack::HitWhere ? "spine_02" : "Head", // Body or head
+                    {}
+                );
+                
+                // Adjust position
+                if (Cheat::BulletTrack::HitWhere) {
+                    targetAimPos.Z += 5.0f; // Body adjustment
+                } else {
+                    targetAimPos.Z -= -19.0f; // Head adjustment (Z +19)
+                }
+                
+                FRotator adjustedRot = ToRotator(StartLoc, targetAimPos);
+                return ShootBulletInner(Weapon, StartLoc, adjustedRot, ShootID);
+            }
         }
     }
-    return orig_shoot_event(thiz, start, rot, weapon, unk1, a6, a7, a8);
+    return ShootBulletInner(Weapon, StartLoc, StartRot, ShootID);
+}
+
+// Keep old shoot_event as alias for compatibility if needed, but not used
+inline void (*orig_shoot_event)(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot, void *unk1, int unk2, float a6, float a7, float a8) = nullptr;
+inline void shoot_event(USTExtraShootWeaponComponent *thiz, FVector start, FRotator rot, ASTExtraShootWeapon *weapon, int unk1, float a6, float a7, float a8)
+{
+    // Deprecated - now using ShootBulletInner at 0x6ff841c
+    if (orig_shoot_event) {
+        return orig_shoot_event(thiz, start, rot, weapon, unk1, a6, a7, a8);
+    }
 }
 
 inline const char *GetVehicleName(ASTExtraVehicleBase *Vehicle) 

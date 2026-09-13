@@ -661,35 +661,69 @@ void InstallInputHooks() {
 }
 
 void InstallImGuiHooks() {
-    // Hook libUE4 offset first - primary
+    // Hook libUE4 offsets as GOT pointer overwrite - not as function hook
+    // Because 0xD495D50 and 0xD494B60 are likely GOT entries pointing to real eglSwapBuffers / AInputQueue_getEvent
+    // Hooking them as function (shadowhook_hook_func_addr) corrupts data and causes splash hang
     if (Cheat::libUE4Base != 0) {
         if (!g_EglHookInstalled) {
             uintptr_t eglAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
-            LOGI("[ImGui] Hooking eglSwapBuffers via base+0x%llx @ %p via ShadowHook (offset)", (unsigned long long)Cheat::eglSwapBuffers_Offset, (void*)eglAddr);
-            void* stub = shadowhook_hook_func_addr((void*)eglAddr, (void*)hook_eglSwapBuffers_Offset, (void**)&orig_eglSwapBuffers_Offset);
-            if (stub) {
-                g_EglHookInstalled = true;
-                orig_eglSwapBuffers = orig_eglSwapBuffers_Offset; // keep generic pointer in sync
-                LOGI("[ImGui] eglSwapBuffers offset hooked ShadowHook stub=%p orig=%p", stub, orig_eglSwapBuffers_Offset);
-            } else {
-                int err = shadowhook_get_errno();
-                LOGI("[ImGui] eglSwapBuffers offset ShadowHook failed err=%d (%s)", err, shadowhook_to_errmsg(err));
+            void** gotPtr = (void**)eglAddr;
+            LOGI("[ImGui] Trying GOT overwrite for eglSwapBuffers at %p", gotPtr);
+            if (Tools::IsPtrValid((void*)gotPtr)) {
+                void* origPtr = *gotPtr;
+                LOGI("[ImGui] GOT eglSwapBuffers current ptr %p", origPtr);
+                if (origPtr && Tools::IsPtrValid(origPtr)) {
+                    uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
+                    if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
+                        orig_eglSwapBuffers_Offset = (EGLBoolean (*)(EGLDisplay, EGLSurface))origPtr;
+                        orig_eglSwapBuffers = orig_eglSwapBuffers_Offset;
+                        *gotPtr = (void*)hook_eglSwapBuffers_Offset;
+                        g_EglHookInstalled = true;
+                        LOGI("[ImGui] eglSwapBuffers hooked via GOT overwrite @ %p orig %p -> hook %p", gotPtr, origPtr, hook_eglSwapBuffers_Offset);
+                    } else {
+                        LOGI("[ImGui] mprotect failed for eglSwapBuffers GOT errno=%d", errno);
+                    }
+                }
+            }
+            // Fallback to function hook if GOT method failed
+            if (!g_EglHookInstalled) {
+                LOGI("[ImGui] GOT overwrite failed, trying function hook at %p", (void*)eglAddr);
+                void* stub = shadowhook_hook_func_addr((void*)eglAddr, (void*)hook_eglSwapBuffers_Offset, (void**)&orig_eglSwapBuffers_Offset);
+                if (stub) {
+                    g_EglHookInstalled = true;
+                    orig_eglSwapBuffers = orig_eglSwapBuffers_Offset;
+                    LOGI("[ImGui] eglSwapBuffers offset hooked via function hook stub=%p orig=%p", stub, orig_eglSwapBuffers_Offset);
+                } else {
+                    int err = shadowhook_get_errno();
+                    LOGI("[ImGui] eglSwapBuffers offset function hook failed err=%d (%s)", err, shadowhook_to_errmsg(err));
+                }
             }
         }
         uintptr_t inputAddr = Cheat::libUE4Base + Cheat::AInputQueue_GetEvent_Offset;
+        void** inputGot = (void**)inputAddr;
         if (!orig_AInputQueue_getEvent) {
-            LOGI("[ImGui] Hooking AInputQueue_getEvent via base+0x%llx @ %p via ShadowHook", (unsigned long long)Cheat::AInputQueue_GetEvent_Offset, (void*)inputAddr);
-            void* stub = shadowhook_hook_func_addr((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
-            if (stub) LOGI("[ImGui] AInputQueue_getEvent hooked via offset ShadowHook");
-            else {
-                int err = shadowhook_get_errno();
-                LOGI("[ImGui] AInputQueue_getEvent ShadowHook failed err=%d (%s)", err, shadowhook_to_errmsg(err));
+            LOGI("[ImGui] Trying GOT overwrite for AInputQueue_getEvent at %p", inputGot);
+            if (Tools::IsPtrValid((void*)inputGot)) {
+                void* origPtr = *inputGot;
+                LOGI("[ImGui] GOT AInputQueue_getEvent current ptr %p", origPtr);
+                if (origPtr && Tools::IsPtrValid(origPtr)) {
+                    uintptr_t page = (uintptr_t)inputGot & ~0xFFFULL;
+                    if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
+                        orig_AInputQueue_getEvent = (int (*)(AInputQueue*, AInputEvent**))origPtr;
+                        *inputGot = (void*)hook_AInputQueue_getEvent;
+                        LOGI("[ImGui] AInputQueue_getEvent hooked via GOT overwrite");
+                    }
+                }
+            }
+            if (!orig_AInputQueue_getEvent) {
+                void* stub = shadowhook_hook_func_addr((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
+                if (stub) LOGI("[ImGui] AInputQueue_getEvent hooked via function hook");
+                else LOGI("[ImGui] AInputQueue_getEvent hook failed err=%d", shadowhook_get_errno());
             }
         }
     }
 
-    // Hook real eglSwapBuffers in libEGL.so as well - critical for per-frame rendering
-    // Use separate hook with reentrancy guard to avoid double render when wrapper calls real
+    // Hook real eglSwapBuffers in libEGL.so - critical for per-frame rendering
     const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", "libGLESv3.so", nullptr };
     for (int i = 0; eglLibs[i] != nullptr; ++i) {
         void* lib = dlopen(eglLibs[i], RTLD_NOW);
@@ -702,7 +736,6 @@ void InstallImGuiHooks() {
             LOGI("[ImGui] dlsym eglSwapBuffers not found in %s", eglLibs[i]);
             continue;
         }
-        // Avoid hooking same address as offset hook
         if (Cheat::libUE4Base != 0) {
             uintptr_t offsetAddr = Cheat::libUE4Base + Cheat::eglSwapBuffers_Offset;
             if (sym == (void*)offsetAddr) {
@@ -710,7 +743,6 @@ void InstallImGuiHooks() {
                 continue;
             }
         }
-        // Check if already hooked
         if (orig_eglSwapBuffers_Real && sym == (void*)orig_eglSwapBuffers_Real) {
             LOGI("[ImGui] real eglSwapBuffers in %s already hooked", eglLibs[i]);
             continue;
@@ -724,7 +756,6 @@ void InstallImGuiHooks() {
                 orig_eglSwapBuffers = orig_eglSwapBuffers_Real;
                 g_EglHookInstalled = true;
             }
-            // Don't break - hook all libs to ensure per-frame catch
         } else {
             int err = shadowhook_get_errno();
             LOGI("[ImGui] real eglSwapBuffers ShadowHook in %s failed err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));

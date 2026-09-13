@@ -75,6 +75,7 @@ namespace Cheat
         inline bool Position = false;
 
         inline float Recoil = 1.0f;
+        inline float RecoilSet = 1.0f;
         inline float Range = 500.0f;
         inline float Fov = 250.0f;
         inline float Radius = 250.0f;

@@ -345,90 +345,135 @@ void DrawHUD(AHUD* HUD)
 
 void DrawMemory()
 {
-    if (Cheat::localPlayer && Cheat::localController)
-    {
-        if (Cheat::Aimbot::Enable)
-        {
-            ASTExtraPlayerCharacter* Target = GetTargetForAimBot();
+    if (!Cheat::localPlayer || !Cheat::localController) return;
 
-            if (Target)
-            {
-                bool triggerOk = true;
+    if (Cheat::Aimbot::Enable) {
+        // Get aim target with bone visibility
+        ASTExtraPlayerCharacter *Target = GetTargetForAimBot();
+        if (Target) {
+            bool triggerOk = false;
+            if (Cheat::Aimbot::Trigger == EAimTrigger::None) {
                 triggerOk = Cheat::localPlayer->bIsWeaponFiring;
+            }
+            if (Cheat::Aimbot::Trigger == EAimTrigger::Scoping) {
+                triggerOk = Cheat::localPlayer->bIsGunADS;
+            }
+            if (Cheat::Aimbot::Trigger == EAimTrigger::Both) {
+                triggerOk = Cheat::localPlayer->bIsWeaponFiring || Cheat::localPlayer->bIsGunADS;
+            }
+            if (Cheat::Aimbot::Trigger == EAimTrigger::Shooting) {
+                triggerOk = Cheat::localPlayer->bIsWeaponFiring;
+            }
+            if (Cheat::Aimbot::Trigger == EAimTrigger::Any) {
+                triggerOk = true;
+            }
 
-                if (triggerOk)
-                {
-                    FVector targetAimPos = Target->GetBonePos("Head", {});
-                    targetAimPos.Z -= 22.0f;
+            if (triggerOk) {
+                FVector targetAimPos;
 
+                // Base bone selection
+                if (Cheat::Aimbot::Target == EAimTarget::Head) {
+                    targetAimPos = Target->GetBonePos("Head", {0,0,0});
+                }
+                if (Cheat::Aimbot::Target == EAimTarget::Chest) {
+                    targetAimPos = Target->GetBonePos("spine_02", {0,0,0});
+                }
+
+                // If using algorithm from GetTargetForAimBot (bone visibility), override
+                // This matches your provided switch logic
+                switch (algorithm) {
+                    case 1: targetAimPos = Target->GetBonePos("Head", {}); break;
+                    case 2: targetAimPos = Target->GetBonePos("pelvis", {}); break;
+                    case 3: targetAimPos = Target->GetBonePos("calf_l", {}); break;
+                    case 4: targetAimPos = Target->GetBonePos("calf_r", {}); break;
+                    case 5: targetAimPos = Target->GetBonePos("lowerarm_l", {}); break;
+                    case 6: targetAimPos = Target->GetBonePos("lowerarm_r", {}); break;
+                    case 7: targetAimPos = Target->GetBonePos("upperarm_l", {}); break;
+                    case 8: targetAimPos = Target->GetBonePos("upperarm_r", {}); break;
+                    case 9: targetAimPos = Target->GetBonePos("thigh_l", {}); break;
+                    case 10: targetAimPos = Target->GetBonePos("thigh_r", {}); break;
+                    case 11: targetAimPos = Target->GetBonePos("foot_l", {}); break;
+                    case 12: targetAimPos = Target->GetBonePos("foot_r", {}); break;
+                    default: break;
+                }
+
+                // Chest mode uses algorithm to pick visible bone, default body
+                if (Cheat::Aimbot::Target == EAimTarget::Chest) {
+                    if (algorithm == 0) {
+                        targetAimPos = Target->GetBonePos("Head", {});
+                    } else if (algorithm == 1) {
+                        targetAimPos = Target->GetBonePos("spine_03", {});
+                    } else if (algorithm == 2) {
+                        targetAimPos = Target->GetBonePos("pelvis", {});
+                    } else if (algorithm == 3) {
+                        targetAimPos = Target->GetBonePos("calf_l", {});
+                    } else if (algorithm == 4) {
+                        targetAimPos = Target->GetBonePos("calf_r", {});
+                    } else if (algorithm == 5) {
+                        targetAimPos = Target->GetBonePos("lowerarm_l", {});
+                    } else if (algorithm == 6) {
+                        targetAimPos = Target->GetBonePos("lowerarm_r", {});
+                    } else if (algorithm == 7) {
+                        targetAimPos = Target->GetBonePos("upperarm_l", {});
+                    } else if (algorithm == 8) {
+                        targetAimPos = Target->GetBonePos("upperarm_r", {});
+                    } else if (algorithm == 9) {
+                        targetAimPos = Target->GetBonePos("thigh_l", {});
+                    } else if (algorithm == 10) {
+                        targetAimPos = Target->GetBonePos("thigh_r", {});
+                    } else if (algorithm == 11) {
+                        targetAimPos = Target->GetBonePos("foot_l", {});
+                    } else if (algorithm == 12) {
+                        targetAimPos = Target->GetBonePos("foot_r", {});
+                    }
+                }
+
+                if (targetAimPos.X > 0 && targetAimPos.Y > 0 && targetAimPos.Z > 0) {
                     auto WeaponManagerComponent = Cheat::localPlayer->WeaponManagerComponent;
-
-                    if (WeaponManagerComponent)
-                    {
+                    if (WeaponManagerComponent) {
                         auto propSlot = WeaponManagerComponent->GetCurrentUsingPropSlot();
-
-                        if ((int)propSlot.GetValue() >= 1 && (int)propSlot.GetValue() <= 3)
-                        {
-                            auto CurrentWeaponReplicated = (ASTExtraShootWeapon*)WeaponManagerComponent->CurrentWeaponReplicated;
-
-                            if (CurrentWeaponReplicated)
-                            {
+                        if ((int)propSlot.GetValue() >= 1 && (int)propSlot.GetValue() <= 3) {
+                            auto CurrentWeaponReplicated = (ASTExtraShootWeapon *)WeaponManagerComponent->CurrentWeaponReplicated;
+                            if (CurrentWeaponReplicated) {
                                 auto ShootWeaponComponent = CurrentWeaponReplicated->ShootWeaponComponent;
+                                if (ShootWeaponComponent) {
+                                    UShootWeaponEntity *ShootWeaponEntityComponent = ShootWeaponComponent->ShootWeaponEntityComponent;
+                                    if (ShootWeaponEntityComponent) {
+                                        // Bullet fire speed at 0x560 as per your note
+                                        float BulletFireSpeed = *(float*)((uintptr_t)ShootWeaponEntityComponent + 0x560);
+                                        if (BulletFireSpeed <= 0) BulletFireSpeed = ShootWeaponEntityComponent->BulletFireSpeed;
 
-                                if (ShootWeaponComponent)
-                                {
-                                    UShootWeaponEntity* ShootWeaponEntityComponent = ShootWeaponComponent->ShootWeaponEntityComponent;
-
-                                    if (ShootWeaponEntityComponent)
-                                    {
-                                        ASTExtraVehicleBase* CurrentVehicle = Target->CurrentVehicle;
-
-                                        if (CurrentVehicle)
-                                        {
+                                        ASTExtraVehicleBase *CurrentVehicle = Target->CurrentVehicle;
+                                        if (CurrentVehicle) {
                                             FVector LinearVelocity = CurrentVehicle->ReplicatedMovement.LinearVelocity;
                                             float dist = Cheat::localPlayer->GetDistanceTo(Target);
-                                            auto timeToTravel = dist / ShootWeaponEntityComponent->BulletFireSpeed;
-                                            targetAimPos = UKismetMathLibrary::Add_VectorVector(
-                                                targetAimPos,
-                                                UKismetMathLibrary::Multiply_VectorFloat(LinearVelocity, timeToTravel)
-                                            );
-                                        }
-                                        else
-                                        {
+                                            auto timeToTravel = dist / BulletFireSpeed;
+                                            targetAimPos = UKismetMathLibrary::Add_VectorVector(targetAimPos, UKismetMathLibrary::Multiply_VectorFloat(LinearVelocity, timeToTravel));
+                                            targetAimPos.Z += LinearVelocity.Z * timeToTravel + 0.5f * 573.f * timeToTravel * timeToTravel;
+                                        } else {
                                             FVector Velocity = Target->GetVelocity();
                                             float dist = Cheat::localPlayer->GetDistanceTo(Target);
-                                            auto timeToTravel = dist / ShootWeaponEntityComponent->BulletFireSpeed;
-                                            targetAimPos = UKismetMathLibrary::Add_VectorVector(
-                                                targetAimPos,
-                                                UKismetMathLibrary::Multiply_VectorFloat(Velocity, timeToTravel)
-                                            );
+                                            auto timeToTravel = dist / BulletFireSpeed;
+                                            targetAimPos = UKismetMathLibrary::Add_VectorVector(targetAimPos, UKismetMathLibrary::Multiply_VectorFloat(Velocity, timeToTravel));
+                                            targetAimPos.Z += Velocity.Z * timeToTravel + 0.5f * 573.f * timeToTravel * timeToTravel;
                                         }
 
-                                        if (Cheat::localPlayer->bIsWeaponFiring)
-                                        {
+                                        if (Cheat::localPlayer->bIsWeaponFiring) {
                                             float dist = Cheat::localPlayer->GetDistanceTo(Target) / 100.f;
-                                            targetAimPos.Z -= dist * Cheat::Aimbot::Recoil;
+                                            targetAimPos.Z -= dist * Cheat::Aimbot::RecoilSet;
                                         }
 
-                                        FVector fDir = UKismetMathLibrary::Subtract_VectorVector(
-                                            targetAimPos,
-                                            Cheat::localController->PlayerCameraManager->CameraCache.POV.Location
-                                        );
+                                        // ADS fix with AimControlRotationAdditive
+                                        auto ControlRotator = Cheat::localController->ControlRotation;
+                                        auto aimRotation = ToRotator(Cheat::localController->PlayerCameraManager->CameraCache.POV.Location, targetAimPos);
+                                        ControlRotator.Pitch = aimRotation.Pitch - Cheat::localController->ControlRotation.Pitch - Cheat::localPlayer->AimControlRotationAdditive.Pitch;
+                                        ControlRotator.Yaw = aimRotation.Yaw - Cheat::localController->ControlRotation.Yaw - Cheat::localPlayer->AimControlRotationAdditive.Yaw;
 
-                                        FRotator Yaptr = UKismetMathLibrary::Conv_VectorToRotator(fDir);
-                                        FRotator CpYaT = Cheat::localController->PlayerCameraManager->CameraCache.POV.Rotation;
-
-                                        Yaptr.Pitch -= CpYaT.Pitch;
-                                        Yaptr.Yaw -= CpYaT.Yaw;
-                                        Yaptr.Roll = 0.f;
-
-                                        NekoHook(Yaptr);
-
-                                        CpYaT.Pitch += Yaptr.Pitch / Xs;
-                                        CpYaT.Yaw += Yaptr.Yaw / Ys;
-                                        CpYaT.Roll = 0.f;
-
-                                        Cheat::localController->SetControlRotation(CpYaT, "");
+                                        int hitChance = rand() % 101;
+                                        if (hitChance <= 100) {
+                                            Cheat::localPlayer->AddControllerPitchInput(ControlRotator.Pitch);
+                                            Cheat::localPlayer->AddControllerYawInput(ControlRotator.Yaw);
+                                        }
                                     }
                                 }
                             }
@@ -437,90 +482,91 @@ void DrawMemory()
                 }
             }
         }
+    }
 
-        static USTExtraGameInstance* Instance = nullptr;
-        if (!Instance)
+    // Memory features (Wide, Hit, Small)
+    static USTExtraGameInstance* Instance = nullptr;
+    if (!Instance)
+    {
+        Instance = UObject::FindObject<USTExtraGameInstance>("STExtraGameInstance Transient.UAEGameEngine_1.STExtraGameInstance_1");
+        if (Instance != nullptr)
         {
-            Instance = UObject::FindObject<USTExtraGameInstance>("STExtraGameInstance Transient.UAEGameEngine_1.STExtraGameInstance_1");
-            if (Instance != nullptr)
+            auto& UserSettings = Instance->UserDetailSetting;
+            UserSettings.PUBGDeviceFPSDef = 120;
+            UserSettings.PUBGDeviceFPSLow = 120;
+            UserSettings.PUBGDeviceFPSMid = 120;
+            UserSettings.PUBGDeviceFPSHigh = 120;
+            UserSettings.PUBGDeviceFPSHDR = 120;
+            UserSettings.PUBGDeviceFPSUltralHigh = 120;
+            UserSettings.DeviceMaxQualityLevel = 3;
+        }
+    }
+
+    static ULocalPlayer *UlocalPlayer = nullptr;
+    if (!UlocalPlayer)
+    {
+        UlocalPlayer = UObject::FindObject<ULocalPlayer>("LocalPlayer Transient.UAEGameEngine_1.LocalPlayer_1");
+    }
+
+    if (UlocalPlayer == nullptr)
+        return;
+
+    static auto OrigView = UlocalPlayer->AspectRatioAxisConstraint;
+    if (Cheat::Memory::Wide)
+    {
+        UlocalPlayer->AspectRatioAxisConstraint = EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV;
+    }
+    else
+    {
+        if (UlocalPlayer->AspectRatioAxisConstraint != OrigView)
+        {
+            UlocalPlayer->AspectRatioAxisConstraint = OrigView;
+        }
+    }
+    
+    if (Cheat::Memory::Hit)
+    {
+        TriggerHitEffect();
+    }
+
+    if (Cheat::Memory::Wide)
+    {
+        uintptr_t localPlayer = (uintptr_t)Cheat::localPlayer;
+
+        if (localPlayer)
+        {
+            uintptr_t cameraComponent = *(uintptr_t*)(localPlayer + 0x1C08);
+
+            if (cameraComponent)
             {
-                auto& UserSettings = Instance->UserDetailSetting;
-                UserSettings.PUBGDeviceFPSDef = 120;
-                UserSettings.PUBGDeviceFPSLow = 120;
-                UserSettings.PUBGDeviceFPSMid = 120;
-                UserSettings.PUBGDeviceFPSHigh = 120;
-                UserSettings.PUBGDeviceFPSHDR = 120;
-                UserSettings.PUBGDeviceFPSUltralHigh = 120;
-                UserSettings.DeviceMaxQualityLevel = 3;
+                *(float*)(cameraComponent + 0x33C) = 140.0f;
             }
         }
+    }
 
-        static ULocalPlayer *UlocalPlayer = nullptr;
-        if (!UlocalPlayer)
-        {
-            UlocalPlayer = UObject::FindObject<ULocalPlayer>("LocalPlayer Transient.UAEGameEngine_1.LocalPlayer_1");
-        }
+    if (Cheat::Memory::Small)
+    {
+        auto WeaponManagerComponent = Cheat::localPlayer->WeaponManagerComponent;
 
-        if (UlocalPlayer == nullptr)
-            return;
+        if (WeaponManagerComponent)
+        {
+            auto propSlot = WeaponManagerComponent->GetCurrentUsingPropSlot();
 
-        static auto OrigView = UlocalPlayer->AspectRatioAxisConstraint;
-        if (Cheat::Memory::Wide)
-        {
-            UlocalPlayer->AspectRatioAxisConstraint = EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV;
-        }
-        else
-        {
-            if (UlocalPlayer->AspectRatioAxisConstraint != OrigView)
+            if ((int)propSlot.GetValue() >= 1 && (int)propSlot.GetValue() <= 3)
             {
-                UlocalPlayer->AspectRatioAxisConstraint = OrigView;
-            }
-        }
-        
-        if (Cheat::Memory::Hit)
-        {
-            TriggerHitEffect();
-        }
+                auto CurrentWeaponReplicated = (ASTExtraShootWeapon*)WeaponManagerComponent->CurrentWeaponReplicated;
 
-        if (Cheat::Memory::Wide)
-        {
-            uintptr_t localPlayer = (uintptr_t)Cheat::localPlayer;
-
-            if (localPlayer)
-            {
-                uintptr_t cameraComponent = *(uintptr_t*)(localPlayer + 0x1C08);
-
-                if (cameraComponent)
+                if (CurrentWeaponReplicated)
                 {
-                    *(float*)(cameraComponent + 0x33C) = 140.0f;
-                }
-            }
-        }
+                    auto ShootWeaponComponent = CurrentWeaponReplicated->ShootWeaponComponent;
 
-        if (Cheat::Memory::Small)
-        {
-            auto WeaponManagerComponent = Cheat::localPlayer->WeaponManagerComponent;
-
-            if (WeaponManagerComponent)
-            {
-                auto propSlot = WeaponManagerComponent->GetCurrentUsingPropSlot();
-
-                if ((int)propSlot.GetValue() >= 1 && (int)propSlot.GetValue() <= 3)
-                {
-                    auto CurrentWeaponReplicated = (ASTExtraShootWeapon*)WeaponManagerComponent->CurrentWeaponReplicated;
-
-                    if (CurrentWeaponReplicated)
+                    if (ShootWeaponComponent)
                     {
-                        auto ShootWeaponComponent = CurrentWeaponReplicated->ShootWeaponComponent;
+                        UShootWeaponEntity* ShootWeaponEntityComponent = ShootWeaponComponent->ShootWeaponEntityComponent;
 
-                        if (ShootWeaponComponent)
+                        if (ShootWeaponEntityComponent && Cheat::Memory::Small)
                         {
-                            UShootWeaponEntity* ShootWeaponEntityComponent = ShootWeaponComponent->ShootWeaponEntityComponent;
-
-                            if (ShootWeaponEntityComponent && Cheat::Memory::Small)
-                            {
-                                ShootWeaponEntityComponent->GameDeviationFactor = 0.0f;
-                            }
+                            ShootWeaponEntityComponent->GameDeviationFactor = 0.0f;
                         }
                     }
                 }

@@ -196,7 +196,9 @@ void DrawMenu() {
     if (menuH < 400) menuH = 400;
     if (menuH > 900) menuH = 900;
 
-    ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Once);
+    // Force visible position for debugging
+    ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Always);
     char titleBuf[128];
     // Like example: FPS in title
     sprintf(titleBuf, "SANKE MENU ~ HUD ESP ~ %.1f FPS", io.Framerate);

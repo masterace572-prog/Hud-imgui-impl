@@ -125,7 +125,7 @@ namespace Cheat
         inline bool Enable = true; // true = FOV circle mode, false = 180° (no FOV check)
         inline float Radius = 250.0f;
         inline bool ShowCircle = true;
-        inline FLinearColor CircleColor = FLinearColor(0.0f, 0.5f, 1.0f, 1.0f); // blue default
+        inline SDK::FLinearColor CircleColor = SDK::FLinearColor(0.0f, 0.5f, 1.0f, 1.0f); // blue default
     }
 }
 

@@ -379,10 +379,10 @@ void DrawMemory()
                 FVector targetAimPos;
 
                 // Base bone selection
-                if (Cheat::Aimbot::Target == EAimTarget::Head) {
+                if (Cheat::Aimbot::Target == Cheat::EAimTarget::Head) {
                     targetAimPos = Target->GetBonePos("Head", {0,0,0});
                 }
-                if (Cheat::Aimbot::Target == EAimTarget::Chest) {
+                if (Cheat::Aimbot::Target == Cheat::EAimTarget::Chest) {
                     targetAimPos = Target->GetBonePos("spine_02", {0,0,0});
                 }
 
@@ -404,7 +404,7 @@ void DrawMemory()
                 }
 
                 // Chest mode uses algorithm to pick visible bone, default body
-                if (Cheat::Aimbot::Target == EAimTarget::Chest) {
+                if (Cheat::Aimbot::Target == Cheat::EAimTarget::Chest) {
                     if (algorithm == 0) {
                         targetAimPos = Target->GetBonePos("Head", {});
                     } else if (algorithm == 1) {
@@ -548,7 +548,7 @@ void AutoEspOn()
     Cheat::FOV::Enable = true;
     Cheat::FOV::Radius = 250.0f;
     Cheat::FOV::ShowCircle = true;
-    Cheat::FOV::CircleColor = FLinearColor(0.0f, 0.5f, 1.0f, 1.0f);
+    Cheat::FOV::CircleColor = SDK::FLinearColor(0.0f, 0.5f, 1.0f, 1.0f);
 
     Cheat::BulletTrack::HitWhere = true;
     Cheat::BulletTrack::HitChance = false;

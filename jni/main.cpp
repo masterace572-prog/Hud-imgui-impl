@@ -609,6 +609,8 @@ void AutoEspOn()
     Cheat::BulletTrack::HitWhere = true;
     Cheat::BulletTrack::HitChance = false;
     Cheat::BulletTrack::SBullet = false;
+    Cheat::BulletTrack::AccuracyMode = 0; // 1 bullet /3
+    Cheat::BulletTrack::HitTarget = 1; // Body
     
     // Sync aimbot and bullet track shared checks
     Cheat::Aimbot::VisCheck = true;

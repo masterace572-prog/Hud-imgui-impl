@@ -332,6 +332,38 @@ void DrawMenu() {
             ImGui::SliderFloat("Range", &Cheat::BulletTrack::Range, 0.0f, 600.0f, "%.0f");
 
             ImGui::Separator();
+            ImGui::Text("Hit Target (Head / Body)");
+            int hitTarget = Cheat::BulletTrack::HitTarget;
+            if (ImGui::RadioButton("Head", hitTarget == 0)) {
+                Cheat::BulletTrack::HitTarget = 0;
+                Cheat::BulletTrack::HitWhere = false;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Body", hitTarget == 1)) {
+                Cheat::BulletTrack::HitTarget = 1;
+                Cheat::BulletTrack::HitWhere = true;
+            }
+
+            ImGui::Separator();
+            ImGui::Text("Adjust Accuracy - 3 Modes");
+            int acc = Cheat::BulletTrack::AccuracyMode;
+            if (ImGui::RadioButton("1 Bullet / 3 (skip 2)", acc == 0)) {
+                Cheat::BulletTrack::AccuracyMode = 0;
+                Cheat::BulletTrack::HitChance = false;
+                Cheat::BulletTrack::SBullet = false;
+            }
+            if (ImGui::RadioButton("2 Bullets / 3 (skip 1)", acc == 1)) {
+                Cheat::BulletTrack::AccuracyMode = 1;
+                Cheat::BulletTrack::HitChance = false;
+                Cheat::BulletTrack::SBullet = true;
+            }
+            if (ImGui::RadioButton("Full Track - Every Bullet", acc == 2)) {
+                Cheat::BulletTrack::AccuracyMode = 2;
+                Cheat::BulletTrack::HitChance = true;
+                Cheat::BulletTrack::SBullet = true;
+            }
+
+            ImGui::Separator();
             ImGui::Text("Shared Target Checks");
             bool vis = Cheat::BulletTrack::VisCheck;
             if (ImGui::Checkbox("Visibility Check (Shared)", &vis)) {
@@ -348,11 +380,6 @@ void DrawMenu() {
                 Cheat::BulletTrack::iGnoreBot = bot;
                 Cheat::Aimbot::IgnoreBot = bot;
             }
-
-            ImGui::Separator();
-            ImGui::Checkbox("HitChance 3/3", &Cheat::BulletTrack::HitChance);
-            ImGui::Checkbox("Second Bullet", &Cheat::BulletTrack::SBullet);
-            ImGui::Checkbox("Hit Body (else Head)", &Cheat::BulletTrack::HitWhere);
 
             ImGui::Separator();
             ImGui::Text("FOV Circle");

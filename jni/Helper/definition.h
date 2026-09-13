@@ -97,9 +97,15 @@ namespace Cheat
         inline bool AutoFire = false;
 
         // New fields for new ShootBulletInner logic
-        inline bool HitChance = false; // 3/3 mode
-        inline bool SBullet = false;   // second bullet track
-        inline bool HitWhere = false;  // false=Head, true=Body (spine_02)
+        inline bool HitChance = false; // legacy 3/3
+        inline bool SBullet = false;   // legacy second bullet
+        inline bool HitWhere = true;   // false=Head, true=Body (spine_02) default body
+
+        // New adjustable accuracy modes
+        // 0 = 1 bullet from 3 (skip 2), 1 = 2 bullets from 3 (skip 1), 2 = full track every bullet
+        inline int AccuracyMode = 0;
+        // Hit target selection: 0=Head, 1=Body
+        inline int HitTarget = 1; // 0 head, 1 body default body
     }
 
     namespace Memory 
@@ -1054,20 +1060,30 @@ inline void xShootBulletInner(uintptr_t Weapon, FVector StartLoc, FRotator Start
         ASTExtraPlayerCharacter* Target = GetTargetByCross();
         if (Target)
         {
-            // Determine if this bullet should track
+            // Determine if this bullet should track based on AccuracyMode
+            // 0 = 1 bullet from 3 (skip 2), 1 = 2 bullets from 3 (skip 1), 2 = full track
             bool shouldTrack = false;
-            if (Cheat::BulletTrack::HitChance) // If using 3/3 mode (all bullets track)
-            {
-                shouldTrack = true;
+            int mode = Cheat::BulletTrack::AccuracyMode;
+            // Legacy sync: if HitChance true => full, else SBullet decides
+            if (Cheat::BulletTrack::HitChance) mode = 2;
+            else if (Cheat::BulletTrack::SBullet) {
+                if (mode == 0) mode = 1; // upgrade to 2/3 if legacy says second bullet
             }
-            else // 1/3 or 2/3 mode
+
+            switch(mode)
             {
-                switch(BulletCounter % 3)
-                {
-                    case 0: shouldTrack = true; break; // First bullet always tracks
-                    case 1: shouldTrack = Cheat::BulletTrack::SBullet; break; // Second bullet tracks if SBullet is true
-                    case 2: shouldTrack = false; break; // Third bullet never tracks in this setup
-                }
+                case 0: // 1/3
+                    shouldTrack = (BulletCounter % 3 == 0);
+                    break;
+                case 1: // 2/3
+                    shouldTrack = (BulletCounter % 3 == 0 || BulletCounter % 3 == 1);
+                    break;
+                case 2: // full - every bullet tracks (adjust accuracy)
+                    shouldTrack = true;
+                    break;
+                default:
+                    shouldTrack = (BulletCounter % 3 == 0);
+                    break;
             }
             
             BulletCounter++;
@@ -1075,16 +1091,21 @@ inline void xShootBulletInner(uintptr_t Weapon, FVector StartLoc, FRotator Start
 
             if (shouldTrack)
             {
+                // Head or Body selection via HitTarget or HitWhere
+                bool hitBody = Cheat::BulletTrack::HitWhere;
+                if (Cheat::BulletTrack::HitTarget == 1) hitBody = true;
+                if (Cheat::BulletTrack::HitTarget == 0) hitBody = false;
+
                 FVector targetAimPos = Target->GetBonePos(
-                    Cheat::BulletTrack::HitWhere ? "spine_02" : "Head", // Body or head
+                    hitBody ? "spine_02" : "Head",
                     {}
                 );
                 
                 // Adjust position
-                if (Cheat::BulletTrack::HitWhere) {
+                if (hitBody) {
                     targetAimPos.Z += 5.0f; // Body adjustment
                 } else {
-                    targetAimPos.Z -= -19.0f; // Head adjustment (Z +19)
+                    targetAimPos.Z += 19.0f; // Head adjustment
                 }
                 
                 FRotator adjustedRot = ToRotator(StartLoc, targetAimPos);

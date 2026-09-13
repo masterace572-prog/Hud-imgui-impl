@@ -1,5 +1,6 @@
 #include "ImGuiMenu.h"
 #include "Includes/Logger.h"
+#include "Dobby/dobby.h"
 
 // Globals
 bool g_ImGuiInitialized = false;
@@ -89,12 +90,14 @@ bool InitImGui(EGLDisplay dpy, EGLSurface surface, ANativeWindow* window) {
     SetupImGuiStyle();
 
     // Init backends - note example uses ImGui_ImplAndroid_Init() without window, but our backend needs window
-    if (!ImGui_ImplAndroid_Init(window)) {
-        LOGI("ImGui_ImplAndroid_Init failed");
-    }
-    if (!ImGui_ImplOpenGL3_Init("#version 300 es")) {
+    bool androidInit = ImGui_ImplAndroid_Init(window);
+    LOGI("ImGui_ImplAndroid_Init ret=%d", androidInit);
+    bool glInit300 = ImGui_ImplOpenGL3_Init("#version 300 es");
+    LOGI("ImGui_ImplOpenGL3_Init #300 es ret=%d", glInit300);
+    if (!glInit300) {
         LOGI("ImGui_ImplOpenGL3_Init #300 es failed, trying #100");
-        ImGui_ImplOpenGL3_Init("#version 100");
+        bool glInit100 = ImGui_ImplOpenGL3_Init("#version 100");
+        LOGI("ImGui_ImplOpenGL3_Init #100 ret=%d", glInit100);
     }
 
     // Optional: load custom font like example does with PIRO_data
@@ -466,6 +469,13 @@ void RenderImGui() {
         LOGI("[ImGui] RenderImGui frame %d g_MenuOpen=%d w=%d h=%d", frameCount, g_MenuOpen, glWidth, glHeight);
     }
 
+    // Ensure GL state is clean for ImGui
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(glWidth, glHeight);
     ImGui::NewFrame();
@@ -480,6 +490,12 @@ void RenderImGui() {
     ImGuiIO &io = ImGui::GetIO();
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // Check GL error
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR && frameCount % 100 == 0) {
+        LOGI("[ImGui] GL error after RenderDrawData: 0x%x", err);
+    }
 }
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
@@ -608,22 +624,30 @@ void InstallImGuiHooks() {
                 LOGI("[ImGui] eglSwapBuffers hooked via offset ShadowHook stub=%p", stub);
             } else {
                 int err = shadowhook_get_errno();
-                LOGI("[ImGui] eglSwapBuffers offset hook failed via ShadowHook err=%d (%s), trying GOT overwrite", err, shadowhook_to_errmsg(err));
-                // Try GOT overwrite: if this offset is a pointer to eglSwapBuffers, replace it
-                void** gotPtr = (void**)eglAddr;
-                if (Tools::IsPtrValid((void*)gotPtr)) {
-                    void* orig = *gotPtr;
-                    LOGI("[ImGui] GOT eglSwapBuffers ptr @ %p currently %p", gotPtr, orig);
-                    if (orig) {
-                        // Try to make writable and overwrite
-                        uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
-                        if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
-                            orig_eglSwapBuffers = (EGLBoolean (*)(EGLDisplay, EGLSurface))orig;
-                            *gotPtr = (void*)hook_eglSwapBuffers;
-                            g_EglHookInstalled = true;
-                            LOGI("[ImGui] eglSwapBuffers hooked via GOT overwrite @ %p orig %p", gotPtr, orig);
+                LOGI("[ImGui] eglSwapBuffers offset ShadowHook failed err=%d (%s), trying Dobby", err, shadowhook_to_errmsg(err));
+                int dobbyRet = DobbyHook((void*)eglAddr, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+                if (dobbyRet == 0) {
+                    g_EglHookInstalled = true;
+                    LOGI("[ImGui] eglSwapBuffers hooked via offset Dobby");
+                } else {
+                    LOGI("[ImGui] eglSwapBuffers offset Dobby failed ret=%d, trying GOT overwrite", dobbyRet);
+                    // Try GOT overwrite: if this offset is a pointer to eglSwapBuffers, replace it
+                    void** gotPtr = (void**)eglAddr;
+                    if (Tools::IsPtrValid((void*)gotPtr)) {
+                        void* orig = *gotPtr;
+                        LOGI("[ImGui] GOT eglSwapBuffers ptr @ %p currently %p", gotPtr, orig);
+                        if (orig && Tools::IsPtrValid(orig)) {
+                            uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
+                            if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
+                                orig_eglSwapBuffers = (EGLBoolean (*)(EGLDisplay, EGLSurface))orig;
+                                *gotPtr = (void*)hook_eglSwapBuffers;
+                                g_EglHookInstalled = true;
+                                LOGI("[ImGui] eglSwapBuffers hooked via GOT overwrite @ %p orig %p", gotPtr, orig);
+                            } else {
+                                LOGI("[ImGui] mprotect GOT eglSwapBuffers failed errno=%d", errno);
+                            }
                         } else {
-                            LOGI("[ImGui] mprotect GOT eglSwapBuffers failed errno=%d", errno);
+                            LOGI("[ImGui] GOT eglSwapBuffers orig invalid, not overwriting");
                         }
                     }
                 }
@@ -637,17 +661,23 @@ void InstallImGuiHooks() {
             if (stub) LOGI("[ImGui] AInputQueue_getEvent hooked via offset ShadowHook");
             else {
                 int err = shadowhook_get_errno();
-                LOGI("[ImGui] AInputQueue_getEvent hook failed err=%d (%s), trying GOT overwrite", err, shadowhook_to_errmsg(err));
-                void** gotPtr = (void**)inputAddr;
-                if (Tools::IsPtrValid((void*)gotPtr)) {
-                    void* orig = *gotPtr;
-                    LOGI("[ImGui] GOT AInputQueue_getEvent ptr @ %p currently %p", gotPtr, orig);
-                    if (orig) {
-                        uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
-                        if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
-                            orig_AInputQueue_getEvent = (int (*)(AInputQueue*, AInputEvent**))orig;
-                            *gotPtr = (void*)hook_AInputQueue_getEvent;
-                            LOGI("[ImGui] AInputQueue_getEvent hooked via GOT overwrite");
+                LOGI("[ImGui] AInputQueue_getEvent ShadowHook failed err=%d (%s), trying Dobby", err, shadowhook_to_errmsg(err));
+                int dobbyRet = DobbyHook((void*)inputAddr, (void*)hook_AInputQueue_getEvent, (void**)&orig_AInputQueue_getEvent);
+                if (dobbyRet == 0) {
+                    LOGI("[ImGui] AInputQueue_getEvent hooked via Dobby");
+                } else {
+                    LOGI("[ImGui] AInputQueue_getEvent Dobby failed ret=%d, trying GOT", dobbyRet);
+                    void** gotPtr = (void**)inputAddr;
+                    if (Tools::IsPtrValid((void*)gotPtr)) {
+                        void* orig = *gotPtr;
+                        LOGI("[ImGui] GOT AInputQueue_getEvent ptr @ %p currently %p", gotPtr, orig);
+                        if (orig && Tools::IsPtrValid(orig)) {
+                            uintptr_t page = (uintptr_t)gotPtr & ~0xFFFULL;
+                            if (mprotect((void*)page, 0x2000, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
+                                orig_AInputQueue_getEvent = (int (*)(AInputQueue*, AInputEvent**))orig;
+                                *gotPtr = (void*)hook_AInputQueue_getEvent;
+                                LOGI("[ImGui] AInputQueue_getEvent hooked via GOT overwrite");
+                            }
                         }
                     }
                 }
@@ -657,6 +687,7 @@ void InstallImGuiHooks() {
 
     // Always try to hook real eglSwapBuffers in libEGL.so as well, because game may call it directly
     // This ensures we catch per-frame swaps even if offset hook only catches wrapper init
+    // Try ShadowHook first, then Dobby as fallback as user requested
     {
         const char* eglLibs[] = { "libEGL.so", "libGLESv2.so", "libGLESv3.so", nullptr };
         for (int i = 0; eglLibs[i] != nullptr; ++i) {
@@ -672,11 +703,18 @@ void InstallImGuiHooks() {
                 LOGI("[ImGui] Also hooking eglSwapBuffers in %s @ %p", eglLibs[i], sym);
                 void* stub = shadowhook_hook_func_addr(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
                 if (stub) {
-                    LOGI("[ImGui] eglSwapBuffers hooked in %s via dlsym stub=%p", eglLibs[i], stub);
+                    LOGI("[ImGui] eglSwapBuffers hooked in %s via ShadowHook stub=%p", eglLibs[i], stub);
                     g_EglHookInstalled = true;
                 } else {
                     int err = shadowhook_get_errno();
-                    LOGI("[ImGui] eglSwapBuffers hook in %s failed err=%d (%s)", eglLibs[i], err, shadowhook_to_errmsg(err));
+                    LOGI("[ImGui] eglSwapBuffers ShadowHook in %s failed err=%d (%s), trying Dobby", eglLibs[i], err, shadowhook_to_errmsg(err));
+                    int dobbyRet = DobbyHook(sym, (void*)hook_eglSwapBuffers, (void**)&orig_eglSwapBuffers);
+                    if (dobbyRet == 0) {
+                        LOGI("[ImGui] eglSwapBuffers hooked in %s via Dobby", eglLibs[i]);
+                        g_EglHookInstalled = true;
+                    } else {
+                        LOGI("[ImGui] eglSwapBuffers Dobby hook in %s failed ret=%d", eglLibs[i], dobbyRet);
+                    }
                 }
             }
         }
